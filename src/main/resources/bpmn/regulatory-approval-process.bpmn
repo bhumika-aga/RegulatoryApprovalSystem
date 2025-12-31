@@ -80,9 +80,10 @@
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
 
-    <!-- Service Task: Escalate Initial Review -->
+    <!-- External Task: Escalate Initial Review -->
     <bpmn:serviceTask id="Task_EscalateInitialReview" name="Escalate to Manager"
-      camunda:delegateExpression="${escalationDelegate}">
+      camunda:type="external"
+      camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">MANAGER</camunda:inputParameter>
@@ -155,9 +156,10 @@
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
 
-    <!-- Service Task: Escalate Manager Approval -->
+    <!-- External Task: Escalate Manager Approval -->
     <bpmn:serviceTask id="Task_EscalateManagerApproval" name="Escalate to Senior Manager"
-      camunda:delegateExpression="${escalationDelegate}">
+      camunda:type="external"
+      camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">SENIOR_MANAGER</camunda:inputParameter>
@@ -239,9 +241,10 @@
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
 
-    <!-- Service Task: Escalate Compliance Check -->
+    <!-- External Task: Escalate Compliance Check -->
     <bpmn:serviceTask id="Task_EscalateComplianceCheck" name="Escalate to Compliance Lead"
-      camunda:delegateExpression="${escalationDelegate}">
+      camunda:type="external"
+      camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">COMPLIANCE</camunda:inputParameter>
@@ -324,9 +327,10 @@
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
 
-    <!-- Service Task: Escalate Final Approval -->
+    <!-- External Task: Escalate Final Approval -->
     <bpmn:serviceTask id="Task_EscalateFinalApproval" name="Escalate to Admin"
-      camunda:delegateExpression="${escalationDelegate}">
+      camunda:type="external"
+      camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">ADMIN</camunda:inputParameter>
@@ -358,9 +362,10 @@
       <bpmn:outgoing>Flow_FinalRejected</bpmn:outgoing>
     </bpmn:exclusiveGateway>
 
-    <!-- Service Task: Complete Approval -->
+    <!-- External Task: Complete Approval -->
     <bpmn:serviceTask id="Task_CompleteApproval" name="Complete Approval"
-      camunda:delegateExpression="${workflowCompletionDelegate}">
+      camunda:type="external"
+      camunda:topic="workflow-completion">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="outcome">APPROVED</camunda:inputParameter>
@@ -370,9 +375,10 @@
       <bpmn:outgoing>Flow_ToApprovedNotification</bpmn:outgoing>
     </bpmn:serviceTask>
 
-    <!-- Service Task: Complete Rejection -->
+    <!-- External Task: Complete Rejection -->
     <bpmn:serviceTask id="Task_CompleteRejection" name="Complete Rejection"
-      camunda:delegateExpression="${workflowCompletionDelegate}">
+      camunda:type="external"
+      camunda:topic="workflow-completion">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="outcome">REJECTED</camunda:inputParameter>

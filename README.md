@@ -107,7 +107,6 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 │  │   History Service      │  │    │  └──────────┘ └──────────┘ └──────────┘ │
 │  └────────────────────────┘  │    └──────────────────────────────────────────┘
 │  ┌────────────────────────┐  │
-│  │   Java Delegates       │  │
 │  │   Task Listeners       │  │
 │  │   Execution Listeners  │  │
 │  └────────────────────────┘  │
