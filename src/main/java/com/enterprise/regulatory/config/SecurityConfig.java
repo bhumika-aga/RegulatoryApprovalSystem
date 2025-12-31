@@ -46,11 +46,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/health").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
 
                         // Camunda webapp (protected by Camunda's own auth in production)
                         .requestMatchers("/camunda/**").permitAll()
                         .requestMatchers("/engine-rest/**").permitAll()
+
+                        // H2 Console (development only)
+                        .requestMatchers("/h2-console/**").permitAll()
 
                         // Workflow endpoints - role-based
                         .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
@@ -68,6 +71,8 @@ public class SecurityConfig {
 
                         // All other requests require authentication
                         .anyRequest().authenticated())
+                // Allow H2 console to use frames (development only)
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

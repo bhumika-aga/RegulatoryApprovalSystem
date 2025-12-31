@@ -7,41 +7,38 @@ spring:
   application:
     name: regulatory-approval-system
 
-  # PostgreSQL Configuration
+  # H2 In-Memory Database Configuration (with legacy mode for Camunda compatibility)
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:regulatory_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      connection-timeout: 30000
-      maximum-pool-size: 20
-      minimum-idle: 5
-      idle-timeout: 600000
-      max-lifetime: 1800000
-      pool-name: RegulatoryHikariPool
+    url: jdbc:h2:mem:regulatory_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=LEGACY;NON_KEYWORDS=VALUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  # H2 Console (for debugging)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
 
   # JPA Configuration
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
           batch_size: 25
         order_inserts: true
         order_updates: true
 
-  # Flyway Configuration
+  # Flyway Configuration (disabled for H2 - using JPA auto-ddl)
   flyway:
-    enabled: true
-    baseline-on-migrate: true
-    locations: classpath:db/migration
-    validate-on-migrate: true
+    enabled: false
 
 # Camunda BPM Configuration
 camunda:
@@ -118,35 +115,3 @@ logging:
     org.hibernate.SQL: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-
----
-# Development Profile
-spring:
-  config:
-    activate:
-      on-profile: dev
-  jpa:
-    show-sql: true
-    hibernate:
-      ddl-auto: update
-
-logging:
-  level:
-    com.enterprise.regulatory: DEBUG
-    org.hibernate.SQL: DEBUG
-
----
-# Production Profile
-spring:
-  config:
-    activate:
-      on-profile: prod
-  jpa:
-    show-sql: false
-    hibernate:
-      ddl-auto: validate
-
-logging:
-  level:
-    root: WARN
-    com.enterprise.regulatory: INFO

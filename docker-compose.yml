@@ -1,49 +1,18 @@
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: regulatory-postgres
-    environment:
-      POSTGRES_DB: regulatory_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d regulatory_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - regulatory-network
-
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: regulatory-app
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: regulatory_db
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      JWT_SECRET: dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tc2lnbmluZy1hdC1sZWFzdC01MTItYml0cw==
-      CAMUNDA_ADMIN_PASSWORD: admin
-      SPRING_PROFILES_ACTIVE: prod
+      JWT_SECRET: ${JWT_SECRET:-dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tc2lnbmluZy1hdC1sZWFzdC01MTItYml0cw==}
+      CAMUNDA_ADMIN_PASSWORD: ${CAMUNDA_ADMIN_PASSWORD:-admin}
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - regulatory-network
-
-volumes:
-  postgres_data:
 
 networks:
   regulatory-network:

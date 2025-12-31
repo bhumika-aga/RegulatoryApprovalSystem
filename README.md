@@ -114,7 +114,7 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PostgreSQL Database                                │
+│                         H2 In-Memory Database                                │
 │  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐               │
 │  │ Camunda Tables  │ │ Regulatory      │ │ Workflow Audit  │               │
 │  │ (ACT_*)         │ │ Request Table   │ │ Table           │               │
@@ -149,9 +149,8 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 | Runtime         | Java                  | 21 (LTS) |
 | Framework       | Spring Boot           | 3.2.1    |
 | Workflow Engine | Camunda BPM           | 7.20.0   |
-| Database        | PostgreSQL            | 15+      |
+| Database        | H2 (In-Memory)        | 2.x      |
 | Security        | Spring Security + JWT | 6.x      |
-| Migration       | Flyway                | 10.4.1   |
 | API Docs        | SpringDoc OpenAPI     | 2.3.0    |
 | Build           | Maven                 | 3.9+     |
 
@@ -236,52 +235,33 @@ src/main/resources/
 
 - Java 21+
 - Maven 3.9+
-- PostgreSQL 15+
 - Docker (optional)
 
-### Quick Start with Docker
+### Quick Start
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd RegulatoryApprovalSystem
 
-# Start PostgreSQL and application
-docker-compose up -d
+# Build and run (uses H2 in-memory database - no setup required)
+./mvnw clean install
+./mvnw spring-boot:run
 
 # Access the application
 # Swagger UI: http://localhost:8080/swagger-ui.html
 # Camunda Webapp: http://localhost:8080/camunda
+# H2 Console: http://localhost:8080/h2-console
 # Health Check: http://localhost:8080/api/v1/health
 ```
 
-### Manual Setup
-
-1. **Create PostgreSQL Database**
+### Quick Start with Docker
 
 ```bash
-createdb regulatory_db
+docker-compose up -d
 ```
 
-1. **Configure Environment Variables**
-
-```bash
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=regulatory_db
-export DB_USERNAME=postgres
-export DB_PASSWORD=postgres
-export JWT_SECRET=your-512-bit-base64-encoded-secret-key
-```
-
-1. **Build and Run**
-
-```bash
-./mvnw clean install
-./mvnw spring-boot:run
-```
-
-1. **Verify Installation**
+### Verify Installation
 
 ```bash
 curl http://localhost:8080/api/v1/health

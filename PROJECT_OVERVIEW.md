@@ -408,19 +408,15 @@ src/main/java/com/enterprise/regulatory/
 
 - Java 21+
 - Maven 3.9+
-- PostgreSQL 15+
 - Docker (optional)
 
 ### 9.2 Quick Start
 
 ```bash
-# Start PostgreSQL (with Docker)
-docker-compose up -d postgres
-
 # Build the application
 mvn clean package -DskipTests
 
-# Run the application
+# Run the application (uses H2 in-memory database - no setup required)
 mvn spring-boot:run
 
 # Or with Docker Compose
@@ -431,6 +427,7 @@ docker-compose up -d
 
 - **Swagger UI**: <http://localhost:8080/swagger-ui.html>
 - **Camunda Webapp**: <http://localhost:8080/camunda>
+- **H2 Console**: <http://localhost:8080/h2-console>
 - **Health Check**: <http://localhost:8080/api/v1/health>
 
 ### 9.4 Test the Workflow
