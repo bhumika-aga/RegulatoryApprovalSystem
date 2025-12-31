@@ -582,4 +582,454 @@
 
   </bpmn:process>
 
+  <!-- BPMN Diagram Interchange - Visual Layout -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="regulatory-approval-process">
+      <!-- Start Event -->
+      <bpmndi:BPMNShape id="StartEvent_RequestSubmitted_di" bpmnElement="StartEvent_RequestSubmitted">
+        <dc:Bounds x="152" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="130" y="275" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Risk Assessment -->
+      <bpmndi:BPMNShape id="Task_RiskAssessment_di" bpmnElement="Task_RiskAssessment">
+        <dc:Bounds x="240" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Initial Review -->
+      <bpmndi:BPMNShape id="Task_InitialReview_di" bpmnElement="Task_InitialReview">
+        <dc:Bounds x="390" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Timer: Initial Review SLA -->
+      <bpmndi:BPMNShape id="Timer_InitialReviewSLA_di" bpmnElement="Timer_InitialReviewSLA">
+        <dc:Bounds x="422" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="410" y="315" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Escalate Initial Review -->
+      <bpmndi:BPMNShape id="Task_EscalateInitialReview_di" bpmnElement="Task_EscalateInitialReview">
+        <dc:Bounds x="390" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Send Escalation Notification 1 -->
+      <bpmndi:BPMNShape id="Task_SendEscalationNotification1_di" bpmnElement="Task_SendEscalationNotification1">
+        <dc:Bounds x="390" y="470" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Escalation 1 -->
+      <bpmndi:BPMNShape id="EndEvent_Escalation1_di" bpmnElement="EndEvent_Escalation1">
+        <dc:Bounds x="422" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="398" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Gateway: Reviewer Decision -->
+      <bpmndi:BPMNShape id="Gateway_ReviewerDecision_di" bpmnElement="Gateway_ReviewerDecision" isMarkerVisible="true">
+        <dc:Bounds x="545" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="528" y="195" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Request Info Task -->
+      <bpmndi:BPMNShape id="Task_RequestInfo_di" bpmnElement="Task_RequestInfo">
+        <dc:Bounds x="520" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Manager Approval -->
+      <bpmndi:BPMNShape id="Task_ManagerApproval_di" bpmnElement="Task_ManagerApproval">
+        <dc:Bounds x="660" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Timer: Manager Approval SLA -->
+      <bpmndi:BPMNShape id="Timer_ManagerApprovalSLA_di" bpmnElement="Timer_ManagerApprovalSLA">
+        <dc:Bounds x="692" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="678" y="315" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Escalate Manager Approval -->
+      <bpmndi:BPMNShape id="Task_EscalateManagerApproval_di" bpmnElement="Task_EscalateManagerApproval">
+        <dc:Bounds x="660" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Send Escalation Notification 2 -->
+      <bpmndi:BPMNShape id="Task_SendEscalationNotification2_di" bpmnElement="Task_SendEscalationNotification2">
+        <dc:Bounds x="660" y="470" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Escalation 2 -->
+      <bpmndi:BPMNShape id="EndEvent_Escalation2_di" bpmnElement="EndEvent_Escalation2">
+        <dc:Bounds x="692" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="668" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Gateway: Manager Decision -->
+      <bpmndi:BPMNShape id="Gateway_ManagerDecision_di" bpmnElement="Gateway_ManagerDecision" isMarkerVisible="true">
+        <dc:Bounds x="815" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="798" y="195" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Senior Manager Review -->
+      <bpmndi:BPMNShape id="Task_SeniorManagerReview_di" bpmnElement="Task_SeniorManagerReview">
+        <dc:Bounds x="790" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Gateway: Senior Manager Decision -->
+      <bpmndi:BPMNShape id="Gateway_SeniorManagerDecision_di" bpmnElement="Gateway_SeniorManagerDecision" isMarkerVisible="true">
+        <dc:Bounds x="945" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="925" y="65" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Compliance Check -->
+      <bpmndi:BPMNShape id="Task_ComplianceCheck_di" bpmnElement="Task_ComplianceCheck">
+        <dc:Bounds x="930" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Timer: Compliance Check SLA -->
+      <bpmndi:BPMNShape id="Timer_ComplianceCheckSLA_di" bpmnElement="Timer_ComplianceCheckSLA">
+        <dc:Bounds x="962" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="948" y="315" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Escalate Compliance Check -->
+      <bpmndi:BPMNShape id="Task_EscalateComplianceCheck_di" bpmnElement="Task_EscalateComplianceCheck">
+        <dc:Bounds x="930" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Send Escalation Notification 3 -->
+      <bpmndi:BPMNShape id="Task_SendEscalationNotification3_di" bpmnElement="Task_SendEscalationNotification3">
+        <dc:Bounds x="930" y="470" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Escalation 3 -->
+      <bpmndi:BPMNShape id="EndEvent_Escalation3_di" bpmnElement="EndEvent_Escalation3">
+        <dc:Bounds x="962" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="938" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Gateway: Compliance Result -->
+      <bpmndi:BPMNShape id="Gateway_ComplianceResult_di" bpmnElement="Gateway_ComplianceResult" isMarkerVisible="true">
+        <dc:Bounds x="1085" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1068" y="195" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Compliance Manual Review -->
+      <bpmndi:BPMNShape id="Task_ComplianceManualReview_di" bpmnElement="Task_ComplianceManualReview">
+        <dc:Bounds x="1060" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Gateway: Manual Compliance Decision -->
+      <bpmndi:BPMNShape id="Gateway_ManualComplianceDecision_di" bpmnElement="Gateway_ManualComplianceDecision" isMarkerVisible="true">
+        <dc:Bounds x="1215" y="95" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1195" y="65" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Final Approval -->
+      <bpmndi:BPMNShape id="Task_FinalApproval_di" bpmnElement="Task_FinalApproval">
+        <dc:Bounds x="1200" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Timer: Final Approval SLA -->
+      <bpmndi:BPMNShape id="Timer_FinalApprovalSLA_di" bpmnElement="Timer_FinalApprovalSLA">
+        <dc:Bounds x="1232" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1220" y="315" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Escalate Final Approval -->
+      <bpmndi:BPMNShape id="Task_EscalateFinalApproval_di" bpmnElement="Task_EscalateFinalApproval">
+        <dc:Bounds x="1200" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Send Escalation Notification 4 -->
+      <bpmndi:BPMNShape id="Task_SendEscalationNotification4_di" bpmnElement="Task_SendEscalationNotification4">
+        <dc:Bounds x="1200" y="470" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Escalation 4 -->
+      <bpmndi:BPMNShape id="EndEvent_Escalation4_di" bpmnElement="EndEvent_Escalation4">
+        <dc:Bounds x="1232" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1208" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Gateway: Final Decision -->
+      <bpmndi:BPMNShape id="Gateway_FinalDecision_di" bpmnElement="Gateway_FinalDecision" isMarkerVisible="true">
+        <dc:Bounds x="1355" y="225" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1345" y="195" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Complete Approval -->
+      <bpmndi:BPMNShape id="Task_CompleteApproval_di" bpmnElement="Task_CompleteApproval">
+        <dc:Bounds x="1460" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Complete Rejection -->
+      <bpmndi:BPMNShape id="Task_CompleteRejection_di" bpmnElement="Task_CompleteRejection">
+        <dc:Bounds x="1460" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Send Approved Notification -->
+      <bpmndi:BPMNShape id="Task_SendApprovedNotification_di" bpmnElement="Task_SendApprovedNotification">
+        <dc:Bounds x="1610" y="210" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Send Rejected Notification -->
+      <bpmndi:BPMNShape id="Task_SendRejectedNotification_di" bpmnElement="Task_SendRejectedNotification">
+        <dc:Bounds x="1610" y="350" width="100" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Approved -->
+      <bpmndi:BPMNShape id="EndEvent_Approved_di" bpmnElement="EndEvent_Approved">
+        <dc:Bounds x="1762" y="232" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1738" y="275" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- End Event: Rejected -->
+      <bpmndi:BPMNShape id="EndEvent_Rejected_di" bpmnElement="EndEvent_Rejected">
+        <dc:Bounds x="1762" y="372" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1738" y="415" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Sequence Flow Edges -->
+      <bpmndi:BPMNEdge id="Flow_StartToRiskAssessment_di" bpmnElement="Flow_StartToRiskAssessment">
+        <di:waypoint x="188" y="250" />
+        <di:waypoint x="240" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_RiskToReviewer_di" bpmnElement="Flow_RiskToReviewer">
+        <di:waypoint x="340" y="250" />
+        <di:waypoint x="390" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ReviewerDecision_di" bpmnElement="Flow_ReviewerDecision">
+        <di:waypoint x="490" y="250" />
+        <di:waypoint x="545" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ReviewerEscalation_di" bpmnElement="Flow_ReviewerEscalation">
+        <di:waypoint x="440" y="308" />
+        <di:waypoint x="440" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationNotification1_di" bpmnElement="Flow_EscalationNotification1">
+        <di:waypoint x="440" y="430" />
+        <di:waypoint x="440" y="470" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationEnd1_di" bpmnElement="Flow_EscalationEnd1">
+        <di:waypoint x="440" y="550" />
+        <di:waypoint x="440" y="592" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ReviewerApproved_di" bpmnElement="Flow_ReviewerApproved">
+        <di:waypoint x="595" y="250" />
+        <di:waypoint x="660" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ReviewerRejected_di" bpmnElement="Flow_ReviewerRejected">
+        <di:waypoint x="570" y="275" />
+        <di:waypoint x="570" y="390" />
+        <di:waypoint x="1460" y="390" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ReviewerNeedsInfo_di" bpmnElement="Flow_ReviewerNeedsInfo">
+        <di:waypoint x="570" y="225" />
+        <di:waypoint x="570" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_InfoToReviewer_di" bpmnElement="Flow_InfoToReviewer">
+        <di:waypoint x="520" y="120" />
+        <di:waypoint x="440" y="120" />
+        <di:waypoint x="440" y="210" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManagerDecision_di" bpmnElement="Flow_ManagerDecision">
+        <di:waypoint x="760" y="250" />
+        <di:waypoint x="815" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManagerEscalation_di" bpmnElement="Flow_ManagerEscalation">
+        <di:waypoint x="710" y="308" />
+        <di:waypoint x="710" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationNotification2_di" bpmnElement="Flow_EscalationNotification2">
+        <di:waypoint x="710" y="430" />
+        <di:waypoint x="710" y="470" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationEnd2_di" bpmnElement="Flow_EscalationEnd2">
+        <di:waypoint x="710" y="550" />
+        <di:waypoint x="710" y="592" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManagerApproved_di" bpmnElement="Flow_ManagerApproved">
+        <di:waypoint x="865" y="250" />
+        <di:waypoint x="930" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManagerRejected_di" bpmnElement="Flow_ManagerRejected">
+        <di:waypoint x="840" y="275" />
+        <di:waypoint x="840" y="390" />
+        <di:waypoint x="1460" y="390" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManagerEscalate_di" bpmnElement="Flow_ManagerEscalate">
+        <di:waypoint x="840" y="225" />
+        <di:waypoint x="840" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SeniorManagerDecision_di" bpmnElement="Flow_SeniorManagerDecision">
+        <di:waypoint x="890" y="120" />
+        <di:waypoint x="945" y="120" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SeniorApproved_di" bpmnElement="Flow_SeniorApproved">
+        <di:waypoint x="970" y="145" />
+        <di:waypoint x="970" y="210" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SeniorRejected_di" bpmnElement="Flow_SeniorRejected">
+        <di:waypoint x="995" y="120" />
+        <di:waypoint x="1510" y="120" />
+        <di:waypoint x="1510" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ComplianceResult_di" bpmnElement="Flow_ComplianceResult">
+        <di:waypoint x="1030" y="250" />
+        <di:waypoint x="1085" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ComplianceEscalation_di" bpmnElement="Flow_ComplianceEscalation">
+        <di:waypoint x="980" y="308" />
+        <di:waypoint x="980" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationNotification3_di" bpmnElement="Flow_EscalationNotification3">
+        <di:waypoint x="980" y="430" />
+        <di:waypoint x="980" y="470" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationEnd3_di" bpmnElement="Flow_EscalationEnd3">
+        <di:waypoint x="980" y="550" />
+        <di:waypoint x="980" y="592" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_CompliancePassed_di" bpmnElement="Flow_CompliancePassed">
+        <di:waypoint x="1135" y="250" />
+        <di:waypoint x="1200" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ComplianceFailed_di" bpmnElement="Flow_ComplianceFailed">
+        <di:waypoint x="1110" y="275" />
+        <di:waypoint x="1110" y="390" />
+        <di:waypoint x="1460" y="390" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ComplianceNeedsReview_di" bpmnElement="Flow_ComplianceNeedsReview">
+        <di:waypoint x="1110" y="225" />
+        <di:waypoint x="1110" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManualComplianceDecision_di" bpmnElement="Flow_ManualComplianceDecision">
+        <di:waypoint x="1160" y="120" />
+        <di:waypoint x="1215" y="120" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManualCompliancePassed_di" bpmnElement="Flow_ManualCompliancePassed">
+        <di:waypoint x="1240" y="145" />
+        <di:waypoint x="1240" y="210" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ManualComplianceFailed_di" bpmnElement="Flow_ManualComplianceFailed">
+        <di:waypoint x="1265" y="120" />
+        <di:waypoint x="1510" y="120" />
+        <di:waypoint x="1510" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_FinalDecision_di" bpmnElement="Flow_FinalDecision">
+        <di:waypoint x="1300" y="250" />
+        <di:waypoint x="1355" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_FinalEscalation_di" bpmnElement="Flow_FinalEscalation">
+        <di:waypoint x="1250" y="308" />
+        <di:waypoint x="1250" y="350" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationNotification4_di" bpmnElement="Flow_EscalationNotification4">
+        <di:waypoint x="1250" y="430" />
+        <di:waypoint x="1250" y="470" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_EscalationEnd4_di" bpmnElement="Flow_EscalationEnd4">
+        <di:waypoint x="1250" y="550" />
+        <di:waypoint x="1250" y="592" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_FinalApproved_di" bpmnElement="Flow_FinalApproved">
+        <di:waypoint x="1405" y="250" />
+        <di:waypoint x="1460" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_FinalRejected_di" bpmnElement="Flow_FinalRejected">
+        <di:waypoint x="1380" y="275" />
+        <di:waypoint x="1380" y="390" />
+        <di:waypoint x="1460" y="390" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ToApprovedNotification_di" bpmnElement="Flow_ToApprovedNotification">
+        <di:waypoint x="1560" y="250" />
+        <di:waypoint x="1610" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ApprovedEnd_di" bpmnElement="Flow_ApprovedEnd">
+        <di:waypoint x="1710" y="250" />
+        <di:waypoint x="1762" y="250" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ToRejectedNotification_di" bpmnElement="Flow_ToRejectedNotification">
+        <di:waypoint x="1560" y="390" />
+        <di:waypoint x="1610" y="390" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_RejectedEnd_di" bpmnElement="Flow_RejectedEnd">
+        <di:waypoint x="1710" y="390" />
+        <di:waypoint x="1780" y="390" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
 </bpmn:definitions>
