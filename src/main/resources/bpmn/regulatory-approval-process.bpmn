@@ -1,0 +1,579 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  id="Definitions_RegulatoryApproval"
+  targetNamespace="http://bpmn.io/schema/bpmn"
+  exporter="Camunda Modeler"
+  exporterVersion="5.0.0">
+
+  <bpmn:process id="regulatory-approval-process" name="Regulatory Approval Process"
+    isExecutable="true"
+    camunda:historyTimeToLive="180">
+
+    <!-- Process Variables Documentation:
+         - requestId: UUID of the regulatory request
+         - requestTitle: Title of the request
+         - requestType: Type of regulatory request
+         - submitterId: User who submitted the request
+         - department: Department of the submitter
+         - priority: HIGH, NORMAL, LOW
+         - reviewerDecision: APPROVED, REJECTED, NEEDS_INFO
+         - managerDecision: APPROVED, REJECTED, ESCALATE
+         - complianceResult: PASS, FAIL, REQUIRES_ADDITIONAL_INFO
+         - finalDecision: APPROVED, REJECTED
+         - escalated: boolean flag
+         - riskScore: Numeric risk assessment score
+    -->
+
+    <!-- Start Event -->
+    <bpmn:startEvent id="StartEvent_RequestSubmitted" name="Request Submitted"
+      camunda:asyncBefore="true">
+      <bpmn:extensionElements>
+        <camunda:executionListener class="com.enterprise.regulatory.listener.WorkflowStartListener"
+          event="end" />
+      </bpmn:extensionElements>
+      <bpmn:outgoing>Flow_StartToRiskAssessment</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- External Task: Risk Scoring -->
+    <bpmn:serviceTask id="Task_RiskAssessment" name="Risk Assessment"
+      camunda:type="external"
+      camunda:topic="risk-scoring">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="requestId">${requestId}</camunda:inputParameter>
+          <camunda:inputParameter name="requestType">${requestType}</camunda:inputParameter>
+          <camunda:inputParameter name="department">${department}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_StartToRiskAssessment</bpmn:incoming>
+      <bpmn:outgoing>Flow_RiskToReviewer</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- User Task: Initial Reviewer Review (8 hours SLA) -->
+    <bpmn:userTask id="Task_InitialReview" name="Initial Review"
+      camunda:candidateGroups="REVIEWER"
+      camunda:formKey="embedded:app:forms/initial-review.html">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="create" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="assignment" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="complete" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_RiskToReviewer</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReviewerDecision</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Timer Boundary Event: Initial Review SLA (8 hours) -->
+    <bpmn:boundaryEvent id="Timer_InitialReviewSLA" name="8 Hour SLA"
+      attachedToRef="Task_InitialReview"
+      cancelActivity="false">
+      <bpmn:outgoing>Flow_ReviewerEscalation</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_InitialReview">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT8H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <!-- Service Task: Escalate Initial Review -->
+    <bpmn:serviceTask id="Task_EscalateInitialReview" name="Escalate to Manager"
+      camunda:delegateExpression="${escalationDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="escalationTarget">MANAGER</camunda:inputParameter>
+          <camunda:inputParameter name="originalTask">InitialReview</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReviewerEscalation</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationNotification1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- External Task: Send Escalation Notification -->
+    <bpmn:serviceTask id="Task_SendEscalationNotification1" name="Send Escalation Notification"
+      camunda:type="external"
+      camunda:topic="notification-service">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
+          <camunda:inputParameter name="stage">INITIAL_REVIEW</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_EscalationNotification1</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationEnd1</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway: Reviewer Decision -->
+    <bpmn:exclusiveGateway id="Gateway_ReviewerDecision" name="Reviewer Decision">
+      <bpmn:incoming>Flow_ReviewerDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReviewerApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ReviewerRejected</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ReviewerNeedsInfo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- User Task: Request Additional Information -->
+    <bpmn:userTask id="Task_RequestInfo" name="Provide Additional Information"
+      camunda:assignee="${submitterId}"
+      camunda:formKey="embedded:app:forms/additional-info.html">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="create" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="complete" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReviewerNeedsInfo</bpmn:incoming>
+      <bpmn:outgoing>Flow_InfoToReviewer</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- User Task: Manager Approval (24 hours SLA) -->
+    <bpmn:userTask id="Task_ManagerApproval" name="Manager Approval"
+      camunda:candidateGroups="MANAGER"
+      camunda:formKey="embedded:app:forms/manager-approval.html">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="create" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="assignment" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="complete" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReviewerApproved</bpmn:incoming>
+      <bpmn:outgoing>Flow_ManagerDecision</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Timer Boundary Event: Manager Approval SLA (24 hours) -->
+    <bpmn:boundaryEvent id="Timer_ManagerApprovalSLA" name="24 Hour SLA"
+      attachedToRef="Task_ManagerApproval"
+      cancelActivity="false">
+      <bpmn:outgoing>Flow_ManagerEscalation</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_ManagerApproval">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT24H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <!-- Service Task: Escalate Manager Approval -->
+    <bpmn:serviceTask id="Task_EscalateManagerApproval" name="Escalate to Senior Manager"
+      camunda:delegateExpression="${escalationDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="escalationTarget">SENIOR_MANAGER</camunda:inputParameter>
+          <camunda:inputParameter name="originalTask">ManagerApproval</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ManagerEscalation</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationNotification2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- External Task: Send Manager Escalation Notification -->
+    <bpmn:serviceTask id="Task_SendEscalationNotification2" name="Send Escalation Notification"
+      camunda:type="external"
+      camunda:topic="notification-service">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
+          <camunda:inputParameter name="stage">MANAGER_APPROVAL</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_EscalationNotification2</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationEnd2</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway: Manager Decision -->
+    <bpmn:exclusiveGateway id="Gateway_ManagerDecision" name="Manager Decision">
+      <bpmn:incoming>Flow_ManagerDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_ManagerApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManagerRejected</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManagerEscalate</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- User Task: Senior Manager Review (for escalated cases) -->
+    <bpmn:userTask id="Task_SeniorManagerReview" name="Senior Manager Review"
+      camunda:candidateGroups="SENIOR_MANAGER"
+      camunda:formKey="embedded:app:forms/senior-manager-review.html">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="create" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="assignment" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="complete" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ManagerEscalate</bpmn:incoming>
+      <bpmn:outgoing>Flow_SeniorManagerDecision</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Gateway: Senior Manager Decision -->
+    <bpmn:exclusiveGateway id="Gateway_SeniorManagerDecision" name="Senior Manager Decision">
+      <bpmn:incoming>Flow_SeniorManagerDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_SeniorApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SeniorRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- External Task: Compliance Check (48 hours SLA) -->
+    <bpmn:serviceTask id="Task_ComplianceCheck" name="Compliance Check"
+      camunda:type="external"
+      camunda:topic="compliance-check">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="requestId">${requestId}</camunda:inputParameter>
+          <camunda:inputParameter name="requestType">${requestType}</camunda:inputParameter>
+          <camunda:inputParameter name="riskScore">${riskScore}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ManagerApproved</bpmn:incoming>
+      <bpmn:incoming>Flow_SeniorApproved</bpmn:incoming>
+      <bpmn:outgoing>Flow_ComplianceResult</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Timer Boundary Event: Compliance Check SLA (48 hours) -->
+    <bpmn:boundaryEvent id="Timer_ComplianceCheckSLA" name="48 Hour SLA"
+      attachedToRef="Task_ComplianceCheck"
+      cancelActivity="false">
+      <bpmn:outgoing>Flow_ComplianceEscalation</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_ComplianceCheck">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT48H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <!-- Service Task: Escalate Compliance Check -->
+    <bpmn:serviceTask id="Task_EscalateComplianceCheck" name="Escalate to Compliance Lead"
+      camunda:delegateExpression="${escalationDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="escalationTarget">COMPLIANCE</camunda:inputParameter>
+          <camunda:inputParameter name="originalTask">ComplianceCheck</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ComplianceEscalation</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationNotification3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- External Task: Send Compliance Escalation Notification -->
+    <bpmn:serviceTask id="Task_SendEscalationNotification3" name="Send Escalation Notification"
+      camunda:type="external"
+      camunda:topic="notification-service">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
+          <camunda:inputParameter name="stage">COMPLIANCE_CHECK</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_EscalationNotification3</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationEnd3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway: Compliance Result -->
+    <bpmn:exclusiveGateway id="Gateway_ComplianceResult" name="Compliance Result">
+      <bpmn:incoming>Flow_ComplianceResult</bpmn:incoming>
+      <bpmn:outgoing>Flow_CompliancePassed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ComplianceFailed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ComplianceNeedsReview</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- User Task: Compliance Manual Review -->
+    <bpmn:userTask id="Task_ComplianceManualReview" name="Compliance Manual Review"
+      camunda:candidateGroups="COMPLIANCE"
+      camunda:formKey="embedded:app:forms/compliance-review.html">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="create" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="assignment" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="complete" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ComplianceNeedsReview</bpmn:incoming>
+      <bpmn:outgoing>Flow_ManualComplianceDecision</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Gateway: Manual Compliance Decision -->
+    <bpmn:exclusiveGateway id="Gateway_ManualComplianceDecision" name="Manual Compliance Decision">
+      <bpmn:incoming>Flow_ManualComplianceDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_ManualCompliancePassed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManualComplianceFailed</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- User Task: Final Approval (8 hours SLA) -->
+    <bpmn:userTask id="Task_FinalApproval" name="Final Approval"
+      camunda:candidateGroups="ADMIN,SENIOR_MANAGER"
+      camunda:formKey="embedded:app:forms/final-approval.html">
+      <bpmn:extensionElements>
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="create" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="assignment" />
+        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+          event="complete" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CompliancePassed</bpmn:incoming>
+      <bpmn:incoming>Flow_ManualCompliancePassed</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinalDecision</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Timer Boundary Event: Final Approval SLA (8 hours) -->
+    <bpmn:boundaryEvent id="Timer_FinalApprovalSLA" name="8 Hour SLA"
+      attachedToRef="Task_FinalApproval"
+      cancelActivity="false">
+      <bpmn:outgoing>Flow_FinalEscalation</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerDef_FinalApproval">
+        <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT8H</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+
+    <!-- Service Task: Escalate Final Approval -->
+    <bpmn:serviceTask id="Task_EscalateFinalApproval" name="Escalate to Admin"
+      camunda:delegateExpression="${escalationDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="escalationTarget">ADMIN</camunda:inputParameter>
+          <camunda:inputParameter name="originalTask">FinalApproval</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_FinalEscalation</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationNotification4</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- External Task: Send Final Escalation Notification -->
+    <bpmn:serviceTask id="Task_SendEscalationNotification4" name="Send Escalation Notification"
+      camunda:type="external"
+      camunda:topic="notification-service">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
+          <camunda:inputParameter name="stage">FINAL_APPROVAL</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_EscalationNotification4</bpmn:incoming>
+      <bpmn:outgoing>Flow_EscalationEnd4</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway: Final Decision -->
+    <bpmn:exclusiveGateway id="Gateway_FinalDecision" name="Final Decision">
+      <bpmn:incoming>Flow_FinalDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinalApproved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_FinalRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Service Task: Complete Approval -->
+    <bpmn:serviceTask id="Task_CompleteApproval" name="Complete Approval"
+      camunda:delegateExpression="${workflowCompletionDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="outcome">APPROVED</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_FinalApproved</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToApprovedNotification</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Service Task: Complete Rejection -->
+    <bpmn:serviceTask id="Task_CompleteRejection" name="Complete Rejection"
+      camunda:delegateExpression="${workflowCompletionDelegate}">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="outcome">REJECTED</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ReviewerRejected</bpmn:incoming>
+      <bpmn:incoming>Flow_ManagerRejected</bpmn:incoming>
+      <bpmn:incoming>Flow_SeniorRejected</bpmn:incoming>
+      <bpmn:incoming>Flow_ComplianceFailed</bpmn:incoming>
+      <bpmn:incoming>Flow_ManualComplianceFailed</bpmn:incoming>
+      <bpmn:incoming>Flow_FinalRejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToRejectedNotification</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- External Task: Send Approved Notification -->
+    <bpmn:serviceTask id="Task_SendApprovedNotification" name="Send Approval Notification"
+      camunda:type="external"
+      camunda:topic="notification-service">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="notificationType">APPROVED</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToApprovedNotification</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovedEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- External Task: Send Rejected Notification -->
+    <bpmn:serviceTask id="Task_SendRejectedNotification" name="Send Rejection Notification"
+      camunda:type="external"
+      camunda:topic="notification-service">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="notificationType">REJECTED</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToRejectedNotification</bpmn:incoming>
+      <bpmn:outgoing>Flow_RejectedEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- End Events -->
+    <bpmn:endEvent id="EndEvent_Approved" name="Request Approved">
+      <bpmn:extensionElements>
+        <camunda:executionListener class="com.enterprise.regulatory.listener.WorkflowEndListener"
+          event="start" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ApprovedEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:endEvent id="EndEvent_Rejected" name="Request Rejected">
+      <bpmn:extensionElements>
+        <camunda:executionListener class="com.enterprise.regulatory.listener.WorkflowEndListener"
+          event="start" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_RejectedEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:endEvent id="EndEvent_Escalation1" name="Escalation Complete">
+      <bpmn:incoming>Flow_EscalationEnd1</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:endEvent id="EndEvent_Escalation2" name="Escalation Complete">
+      <bpmn:incoming>Flow_EscalationEnd2</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:endEvent id="EndEvent_Escalation3" name="Escalation Complete">
+      <bpmn:incoming>Flow_EscalationEnd3</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:endEvent id="EndEvent_Escalation4" name="Escalation Complete">
+      <bpmn:incoming>Flow_EscalationEnd4</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="Flow_StartToRiskAssessment" sourceRef="StartEvent_RequestSubmitted"
+      targetRef="Task_RiskAssessment" />
+    <bpmn:sequenceFlow id="Flow_RiskToReviewer" sourceRef="Task_RiskAssessment"
+      targetRef="Task_InitialReview" />
+    <bpmn:sequenceFlow id="Flow_ReviewerDecision" sourceRef="Task_InitialReview"
+      targetRef="Gateway_ReviewerDecision" />
+    <bpmn:sequenceFlow id="Flow_ReviewerEscalation" sourceRef="Timer_InitialReviewSLA"
+      targetRef="Task_EscalateInitialReview" />
+    <bpmn:sequenceFlow id="Flow_EscalationNotification1" sourceRef="Task_EscalateInitialReview"
+      targetRef="Task_SendEscalationNotification1" />
+    <bpmn:sequenceFlow id="Flow_EscalationEnd1" sourceRef="Task_SendEscalationNotification1"
+      targetRef="EndEvent_Escalation1" />
+
+    <bpmn:sequenceFlow id="Flow_ReviewerApproved" sourceRef="Gateway_ReviewerDecision"
+      targetRef="Task_ManagerApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${reviewerDecision == 'APPROVED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ReviewerRejected" sourceRef="Gateway_ReviewerDecision"
+      targetRef="Task_CompleteRejection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${reviewerDecision == 'REJECTED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ReviewerNeedsInfo" sourceRef="Gateway_ReviewerDecision"
+      targetRef="Task_RequestInfo">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${reviewerDecision ==
+        'NEEDS_INFO'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_InfoToReviewer" sourceRef="Task_RequestInfo"
+      targetRef="Task_InitialReview" />
+
+    <bpmn:sequenceFlow id="Flow_ManagerDecision" sourceRef="Task_ManagerApproval"
+      targetRef="Gateway_ManagerDecision" />
+    <bpmn:sequenceFlow id="Flow_ManagerEscalation" sourceRef="Timer_ManagerApprovalSLA"
+      targetRef="Task_EscalateManagerApproval" />
+    <bpmn:sequenceFlow id="Flow_EscalationNotification2" sourceRef="Task_EscalateManagerApproval"
+      targetRef="Task_SendEscalationNotification2" />
+    <bpmn:sequenceFlow id="Flow_EscalationEnd2" sourceRef="Task_SendEscalationNotification2"
+      targetRef="EndEvent_Escalation2" />
+
+    <bpmn:sequenceFlow id="Flow_ManagerApproved" sourceRef="Gateway_ManagerDecision"
+      targetRef="Task_ComplianceCheck">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${managerDecision == 'APPROVED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ManagerRejected" sourceRef="Gateway_ManagerDecision"
+      targetRef="Task_CompleteRejection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${managerDecision == 'REJECTED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ManagerEscalate" sourceRef="Gateway_ManagerDecision"
+      targetRef="Task_SeniorManagerReview">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${managerDecision == 'ESCALATE'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_SeniorManagerDecision" sourceRef="Task_SeniorManagerReview"
+      targetRef="Gateway_SeniorManagerDecision" />
+    <bpmn:sequenceFlow id="Flow_SeniorApproved" sourceRef="Gateway_SeniorManagerDecision"
+      targetRef="Task_ComplianceCheck">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${seniorManagerDecision ==
+        'APPROVED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SeniorRejected" sourceRef="Gateway_SeniorManagerDecision"
+      targetRef="Task_CompleteRejection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${seniorManagerDecision ==
+        'REJECTED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ComplianceResult" sourceRef="Task_ComplianceCheck"
+      targetRef="Gateway_ComplianceResult" />
+    <bpmn:sequenceFlow id="Flow_ComplianceEscalation" sourceRef="Timer_ComplianceCheckSLA"
+      targetRef="Task_EscalateComplianceCheck" />
+    <bpmn:sequenceFlow id="Flow_EscalationNotification3" sourceRef="Task_EscalateComplianceCheck"
+      targetRef="Task_SendEscalationNotification3" />
+    <bpmn:sequenceFlow id="Flow_EscalationEnd3" sourceRef="Task_SendEscalationNotification3"
+      targetRef="EndEvent_Escalation3" />
+
+    <bpmn:sequenceFlow id="Flow_CompliancePassed" sourceRef="Gateway_ComplianceResult"
+      targetRef="Task_FinalApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${complianceResult == 'PASS'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ComplianceFailed" sourceRef="Gateway_ComplianceResult"
+      targetRef="Task_CompleteRejection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${complianceResult == 'FAIL'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ComplianceNeedsReview" sourceRef="Gateway_ComplianceResult"
+      targetRef="Task_ComplianceManualReview">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${complianceResult ==
+        'REQUIRES_ADDITIONAL_INFO'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ManualComplianceDecision" sourceRef="Task_ComplianceManualReview"
+      targetRef="Gateway_ManualComplianceDecision" />
+    <bpmn:sequenceFlow id="Flow_ManualCompliancePassed" sourceRef="Gateway_ManualComplianceDecision"
+      targetRef="Task_FinalApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${manualComplianceDecision ==
+        'PASS'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ManualComplianceFailed" sourceRef="Gateway_ManualComplianceDecision"
+      targetRef="Task_CompleteRejection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${manualComplianceDecision ==
+        'FAIL'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_FinalDecision" sourceRef="Task_FinalApproval"
+      targetRef="Gateway_FinalDecision" />
+    <bpmn:sequenceFlow id="Flow_FinalEscalation" sourceRef="Timer_FinalApprovalSLA"
+      targetRef="Task_EscalateFinalApproval" />
+    <bpmn:sequenceFlow id="Flow_EscalationNotification4" sourceRef="Task_EscalateFinalApproval"
+      targetRef="Task_SendEscalationNotification4" />
+    <bpmn:sequenceFlow id="Flow_EscalationEnd4" sourceRef="Task_SendEscalationNotification4"
+      targetRef="EndEvent_Escalation4" />
+
+    <bpmn:sequenceFlow id="Flow_FinalApproved" sourceRef="Gateway_FinalDecision"
+      targetRef="Task_CompleteApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${finalDecision == 'APPROVED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_FinalRejected" sourceRef="Gateway_FinalDecision"
+      targetRef="Task_CompleteRejection">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${finalDecision == 'REJECTED'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_ToApprovedNotification" sourceRef="Task_CompleteApproval"
+      targetRef="Task_SendApprovedNotification" />
+    <bpmn:sequenceFlow id="Flow_ApprovedEnd" sourceRef="Task_SendApprovedNotification"
+      targetRef="EndEvent_Approved" />
+    <bpmn:sequenceFlow id="Flow_ToRejectedNotification" sourceRef="Task_CompleteRejection"
+      targetRef="Task_SendRejectedNotification" />
+    <bpmn:sequenceFlow id="Flow_RejectedEnd" sourceRef="Task_SendRejectedNotification"
+      targetRef="EndEvent_Rejected" />
+
+  </bpmn:process>
+
+</bpmn:definitions>
