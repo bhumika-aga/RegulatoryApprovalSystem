@@ -1,16 +1,22 @@
 package com.enterprise.regulatory.security;
 
-import io.jsonwebtoken.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import javax.crypto.SecretKey;
+
+import org.springframework.stereotype.Component;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
-
-import javax.crypto.SecretKey;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
 
 @Component
 @Slf4j
@@ -77,8 +83,7 @@ public class JwtTokenProvider {
                 "department", claims.get("department", String.class),
                 "iss", claims.getIssuer(),
                 "iat", claims.getIssuedAt(),
-                "exp", claims.getExpiration()
-        );
+                "exp", claims.getExpiration());
     }
 
     public boolean validateToken(String token) {

@@ -1,11 +1,11 @@
 package com.enterprise.regulatory.security;
 
+import java.util.Optional;
+import java.util.Set;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * Utility class for security-related operations.

@@ -1,8 +1,7 @@
 package com.enterprise.regulatory.config;
 
-import com.enterprise.regulatory.security.JwtAuthenticationEntryPoint;
-import com.enterprise.regulatory.security.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,7 +18,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
+import com.enterprise.regulatory.security.JwtAuthenticationEntryPoint;
+import com.enterprise.regulatory.security.JwtAuthenticationFilter;
+
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSecurity
@@ -36,11 +38,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                )
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers("/api/v1/auth/**").permitAll()
@@ -53,7 +53,8 @@ public class SecurityConfig {
                         .requestMatchers("/engine-rest/**").permitAll()
 
                         // Workflow endpoints - role-based
-                        .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start").hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
+                        .hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/workflow/**").authenticated()
 
                         // Task endpoints - role-based
@@ -66,8 +67,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
 
                         // All other requests require authentication
-                        .anyRequest().authenticated()
-                )
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
