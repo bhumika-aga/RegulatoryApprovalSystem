@@ -1,0 +1,16 @@
+package com.enterprise.regulatory.model.enums;
+
+public enum AuditEventType {
+    WORKFLOW_STARTED,
+    TASK_CREATED,
+    TASK_CLAIMED,
+    TASK_COMPLETED,
+    TASK_ESCALATED,
+    TASK_REASSIGNED,
+    DECISION_MADE,
+    COMPLIANCE_CHECK_PASSED,
+    COMPLIANCE_CHECK_FAILED,
+    SLA_BREACH,
+    WORKFLOW_COMPLETED,
+    WORKFLOW_TERMINATED
+}

@@ -1,0 +1,152 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: regulatory-approval-system
+
+  # PostgreSQL Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:regulatory_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: RegulatoryHikariPool
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+
+# Camunda BPM Configuration
+camunda:
+  bpm:
+    admin-user:
+      id: admin
+      password: ${CAMUNDA_ADMIN_PASSWORD:admin}
+      firstName: Admin
+      lastName: User
+    filter:
+      create: All Tasks
+    database:
+      schema-update: true
+    history-level: full
+    job-execution:
+      enabled: true
+      core-pool-size: 3
+      max-pool-size: 10
+    metrics:
+      enabled: true
+    webapp:
+      application-path: /camunda
+    client:
+      base-url: http://localhost:${server.port}/engine-rest
+      async-response-timeout: 30000
+      lock-duration: 60000
+      max-tasks: 10
+      worker-id: regulatory-worker-${random.uuid}
+
+# JWT Security Configuration
+app:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET:dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tc2lnbmluZy1hdC1sZWFzdC01MTItYml0cw==}
+      expiration-ms: 86400000 # 24 hours
+      refresh-expiration-ms: 604800000 # 7 days
+      issuer: regulatory-approval-system
+  notification:
+    email:
+      enabled: false
+    slack:
+      enabled: false
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  info:
+    env:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.enterprise.regulatory: DEBUG
+    org.camunda: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+
+logging:
+  level:
+    com.enterprise.regulatory: DEBUG
+    org.hibernate.SQL: DEBUG
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    root: WARN
+    com.enterprise.regulatory: INFO
