@@ -5,7 +5,9 @@
 [![Camunda](https://img.shields.io/badge/Camunda-7.20.0-blue.svg)](https://camunda.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://www.postgresql.org/)
 
-An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system simulates regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare domains.
+An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system
+simulates regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare
+domains.
 
 ## Table of Contents
 
@@ -25,7 +27,7 @@ An enterprise-grade BPMN-based regulatory approval workflow system built with Sp
 
 The Regulatory Approval System implements a multi-stage approval workflow with the following chain:
 
-```
+```txt
 ┌─────────┐    ┌──────────┐    ┌─────────┐    ┌────────────┐    ┌───────┐
 │ Submit  │───►│ Reviewer │───►│ Manager │───►│ Compliance │───►│ Final │
 │ Request │    │  (8h)    │    │  (24h)  │    │   (48h)    │    │ (8h)  │
@@ -71,7 +73,7 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 
 ### High-Level Architecture
 
-```
+```txt
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Client Applications                                │
 │                    (Web UI, Mobile Apps, API Consumers)                     │
@@ -123,7 +125,7 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 
 ### External Task Worker Pattern
 
-```
+```txt
 ┌──────────────────┐     Poll for Tasks      ┌──────────────────┐
 │  Camunda Engine  │ ◄─────────────────────── │  External Worker │
 │                  │                          │                  │
@@ -143,20 +145,20 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 
 ## Technology Stack
 
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Runtime | Java | 21 (LTS) |
-| Framework | Spring Boot | 3.2.1 |
-| Workflow Engine | Camunda BPM | 7.20.0 |
-| Database | PostgreSQL | 15+ |
-| Security | Spring Security + JWT | 6.x |
-| Migration | Flyway | 10.4.1 |
-| API Docs | SpringDoc OpenAPI | 2.3.0 |
-| Build | Maven | 3.9+ |
+| Component       | Technology            | Version  |
+|-----------------|-----------------------|----------|
+| Runtime         | Java                  | 21 (LTS) |
+| Framework       | Spring Boot           | 3.2.1    |
+| Workflow Engine | Camunda BPM           | 7.20.0   |
+| Database        | PostgreSQL            | 15+      |
+| Security        | Spring Security + JWT | 6.x      |
+| Migration       | Flyway                | 10.4.1   |
+| API Docs        | SpringDoc OpenAPI     | 2.3.0    |
+| Build           | Maven                 | 3.9+     |
 
 ## Project Structure
 
-```
+```txt
 src/main/java/com/enterprise/regulatory/
 ├── config/                    # Configuration classes
 │   ├── SecurityConfig.java    # Spring Security configuration
@@ -173,9 +175,6 @@ src/main/java/com/enterprise/regulatory/
 │   ├── WorkflowService.java   # Workflow operations
 │   ├── WorkflowTaskService.java # Task operations
 │   └── AuditService.java      # Audit operations
-├── delegate/                  # Camunda Java Delegates
-│   ├── EscalationDelegate.java
-│   └── WorkflowCompletionDelegate.java
 ├── listener/                  # Camunda Listeners
 │   ├── TaskAuditListener.java
 │   ├── WorkflowStartListener.java
@@ -184,6 +183,8 @@ src/main/java/com/enterprise/regulatory/
 │   ├── ExternalTaskWorkerConfig.java
 │   ├── ComplianceCheckWorker.java
 │   ├── RiskScoringWorker.java
+│   ├── EscalationWorker.java
+│   ├── WorkflowCompletionWorker.java
 │   └── NotificationWorker.java
 ├── security/                  # Security components
 │   ├── JwtTokenProvider.java
@@ -263,7 +264,7 @@ docker-compose up -d
 createdb regulatory_db
 ```
 
-2. **Configure Environment Variables**
+1. **Configure Environment Variables**
 
 ```bash
 export DB_HOST=localhost
@@ -274,14 +275,14 @@ export DB_PASSWORD=postgres
 export JWT_SECRET=your-512-bit-base64-encoded-secret-key
 ```
 
-3. **Build and Run**
+1. **Build and Run**
 
 ```bash
 ./mvnw clean install
 ./mvnw spring-boot:run
 ```
 
-4. **Verify Installation**
+1. **Verify Installation**
 
 ```bash
 curl http://localhost:8080/api/v1/health
@@ -397,21 +398,24 @@ curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00
 
 ### Roles
 
-| Role | Description | Permissions |
-|------|-------------|-------------|
-| REVIEWER | Initial assessment | Start workflow, Initial Review tasks |
-| MANAGER | Business approval | Manager Approval tasks, view team workflows |
-| SENIOR_MANAGER | Escalation handling | Handle escalations, Final Approval |
-| COMPLIANCE | Regulatory checks | Compliance Review tasks |
-| AUDITOR | Read-only audit | View audit trails only |
-| ADMIN | Full access | All operations, terminate workflows |
+| Role           | Description         | Permissions                                 |
+|----------------|---------------------|---------------------------------------------|
+| REVIEWER       | Initial assessment  | Start workflow, Initial Review tasks        |
+| MANAGER        | Business approval   | Manager Approval tasks, view team workflows |
+| SENIOR_MANAGER | Escalation handling | Handle escalations, Final Approval          |
+| COMPLIANCE     | Regulatory checks   | Compliance Review tasks                     |
+| AUDITOR        | Read-only audit     | View audit trails only                      |
+| ADMIN          | Full access         | All operations, terminate workflows         |
 
 ### JWT Token Structure
 
 ```json
 {
   "sub": "user123",
-  "roles": ["REVIEWER", "MANAGER"],
+  "roles": [
+    "REVIEWER",
+    "MANAGER"
+  ],
   "department": "RISK",
   "iss": "regulatory-approval-system",
   "iat": 1704067200,
@@ -423,33 +427,29 @@ curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DB_HOST` | PostgreSQL host | localhost |
-| `DB_PORT` | PostgreSQL port | 5432 |
-| `DB_NAME` | Database name | regulatory_db |
-| `DB_USERNAME` | Database user | postgres |
-| `DB_PASSWORD` | Database password | postgres |
-| `JWT_SECRET` | JWT signing key (Base64, 512-bit) | - |
-| `CAMUNDA_ADMIN_PASSWORD` | Camunda admin password | admin |
+| Variable                 | Description                       | Default       |
+|--------------------------|-----------------------------------|---------------|
+| `DB_HOST`                | PostgreSQL host                   | localhost     |
+| `DB_PORT`                | PostgreSQL port                   | 5432          |
+| `DB_NAME`                | Database name                     | regulatory_db |
+| `DB_USERNAME`            | Database user                     | postgres      |
+| `DB_PASSWORD`            | Database password                 | postgres      |
+| `JWT_SECRET`             | JWT signing key (Base64, 512-bit) | -             |
+| `CAMUNDA_ADMIN_PASSWORD` | Camunda admin password            | admin         |
 
 ### SLA Configuration
 
 SLA timers are configured in the BPMN file using ISO-8601 durations:
 
-| Stage | Duration | BPMN Timer | Escalation Target |
-|-------|----------|------------|-------------------|
-| Initial Review | 8 hours | `PT8H` | Manager |
-| Manager Approval | 24 hours | `PT24H` | Senior Manager |
-| Compliance Check | 48 hours | `PT48H` | Compliance Lead |
-| Final Approval | 8 hours | `PT8H` | Admin |
+| Stage            | Duration | BPMN Timer | Escalation Target |
+|------------------|----------|------------|-------------------|
+| Initial Review   | 8 hours  | `PT8H`     | Manager           |
+| Manager Approval | 24 hours | `PT24H`    | Senior Manager    |
+| Compliance Check | 48 hours | `PT48H`    | Compliance Lead   |
+| Final Approval   | 8 hours  | `PT8H`     | Admin             |
 
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture documentation with design decisions
 - [Swagger UI](http://localhost:8080/swagger-ui.html) - Interactive API documentation
 - [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration
-
-## License
-
-MIT License
