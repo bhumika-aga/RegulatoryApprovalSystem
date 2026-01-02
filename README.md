@@ -1,9 +1,9 @@
 # Regulatory Approval System
 
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.1-green.svg)](https://spring.io/projects/spring-boot)
-[![Camunda](https://img.shields.io/badge/Camunda-7.20.0-blue.svg)](https://camunda.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://www.postgresql.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.9-green.svg)](https://spring.io/projects/spring-boot)
+[![Camunda](https://img.shields.io/badge/Camunda-7.22.0-blue.svg)](https://camunda.com/)
+[![H2](https://img.shields.io/badge/H2-In--Memory-blue.svg)](https://www.h2database.com/)
 
 An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system
 simulates regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare
@@ -147,11 +147,11 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 | Component       | Technology            | Version  |
 |-----------------|-----------------------|----------|
 | Runtime         | Java                  | 21 (LTS) |
-| Framework       | Spring Boot           | 3.2.1    |
-| Workflow Engine | Camunda BPM           | 7.20.0   |
-| Database        | H2 (In-Memory)        | 2.x      |
+| Framework       | Spring Boot           | 3.5.9    |
+| Workflow Engine | Camunda BPM           | 7.22.0   |
+| Database        | H2 (In-Memory)        | 2.3.x    |
 | Security        | Spring Security + JWT | 6.x      |
-| API Docs        | SpringDoc OpenAPI     | 2.3.0    |
+| API Docs        | SpringDoc OpenAPI     | 2.8.0    |
 | Build           | Maven                 | 3.9+     |
 
 ## Project Structure
@@ -429,6 +429,7 @@ SLA timers are configured in the BPMN file using ISO-8601 durations:
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture documentation with design decisions
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Detailed implementation guide and design decisions
 - [Swagger UI](http://localhost:8080/swagger-ui.html) - Interactive API documentation
-- [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration
+- [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration (Login: admin/admin)
+- [H2 Console](http://localhost:8080/h2-console) - Database console (JDBC URL: jdbc:h2:mem:regulatory_db)

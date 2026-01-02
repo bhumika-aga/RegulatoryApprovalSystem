@@ -6,7 +6,8 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Camunda BPM engine configuration.
  *
- * Note: RuntimeService, TaskService, and RepositoryService beans are automatically
+ * Note: RuntimeService, TaskService, and RepositoryService beans are
+ * automatically
  * provided by Camunda's Spring Boot Starter auto-configuration.
  */
 @Configuration

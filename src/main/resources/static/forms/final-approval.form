@@ -1,0 +1,73 @@
+<form role="form" class="form-horizontal">
+  <h3>Final Approval</h3>
+  <p class="text-muted">This is the final approval step for the regulatory request.</p>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Request Title</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="requestTitle" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Request Type</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="requestType" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Department</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="department" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Risk Score</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="riskScore" cam-variable-type="Long" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Compliance Result</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="complianceResult" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Reviewer Decision</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="reviewerDecision" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Manager Decision</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="managerDecision" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <hr/>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Final Decision *</label>
+    <div class="col-md-9">
+      <select class="form-control" cam-variable-name="finalDecision" cam-variable-type="String" required>
+        <option value="">-- Select Decision --</option>
+        <option value="APPROVED">Approve Request</option>
+        <option value="REJECTED">Reject Request</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Final Comments</label>
+    <div class="col-md-9">
+      <textarea class="form-control" cam-variable-name="finalComment" cam-variable-type="String" rows="3" placeholder="Add your final approval comments..."></textarea>
+    </div>
+  </div>
+</form>

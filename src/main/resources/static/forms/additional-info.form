@@ -1,0 +1,34 @@
+<form role="form" class="form-horizontal">
+  <h3>Provide Additional Information</h3>
+  <p class="text-muted">The reviewer has requested additional information for your request.</p>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Request Title</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="requestTitle" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Request Type</label>
+    <div class="col-md-9">
+      <input type="text" class="form-control" cam-variable-name="requestType" cam-variable-type="String" readonly />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Reviewer Comments</label>
+    <div class="col-md-9">
+      <textarea class="form-control" cam-variable-name="reviewerComment" cam-variable-type="String" rows="2" readonly></textarea>
+    </div>
+  </div>
+
+  <hr/>
+
+  <div class="form-group">
+    <label class="control-label col-md-3">Additional Information *</label>
+    <div class="col-md-9">
+      <textarea class="form-control" cam-variable-name="additionalInfo" cam-variable-type="String" rows="5" placeholder="Please provide the additional information requested..." required></textarea>
+    </div>
+  </div>
+</form>

@@ -3,6 +3,7 @@ package com.enterprise.regulatory.worker;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.camunda.bpm.client.ExternalTaskClient;
@@ -101,7 +102,7 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
 
         try {
             UUID uuid = UUID.fromString(requestId);
-            requestRepository.findById(uuid).ifPresent(request -> {
+            requestRepository.findById(Objects.requireNonNull(uuid)).ifPresent(request -> {
                 request.setStatus(status);
                 request.setFinalDecision(outcome);
                 request.setCompletedAt(LocalDateTime.now());

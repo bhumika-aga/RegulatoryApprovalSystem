@@ -30,8 +30,6 @@ public class TaskAuditListener implements TaskListener {
         String eventName = delegateTask.getEventName();
         String taskId = delegateTask.getId();
         String taskName = delegateTask.getName();
-        String processInstanceId = delegateTask.getProcessInstanceId();
-        String assignee = delegateTask.getAssignee();
 
         log.debug("Task event: {} for task: {} ({})", eventName, taskName, taskId);
 
@@ -129,11 +127,7 @@ public class TaskAuditListener implements TaskListener {
     }
 
     private void handleTaskDeleted(DelegateTask delegateTask) {
-        String processInstanceId = delegateTask.getProcessInstanceId();
-        String taskId = delegateTask.getId();
-        String taskName = delegateTask.getName();
-
-        log.debug("Task deleted: {} ({})", taskName, taskId);
+        log.debug("Task deleted: {} ({})", delegateTask.getName(), delegateTask.getId());
     }
 
     private String buildTaskCreatedComment(DelegateTask delegateTask) {

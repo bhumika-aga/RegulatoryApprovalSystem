@@ -2,6 +2,7 @@ package com.enterprise.regulatory.worker;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.camunda.bpm.client.ExternalTaskClient;
@@ -142,7 +143,7 @@ public class RiskScoringWorker implements ExternalTaskHandler {
     private void updateRequestRiskScore(String requestId, int riskScore) {
         try {
             UUID uuid = UUID.fromString(requestId);
-            requestRepository.findById(uuid).ifPresent(request -> {
+            requestRepository.findById(Objects.requireNonNull(uuid)).ifPresent(request -> {
                 request.setRiskScore(riskScore);
                 requestRepository.save(request);
             });

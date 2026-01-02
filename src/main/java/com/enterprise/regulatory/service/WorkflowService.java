@@ -3,6 +3,7 @@ package com.enterprise.regulatory.service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -45,7 +46,7 @@ public class WorkflowService {
         log.info("Starting workflow for user: {}, request: {}", username, request.getRequestTitle());
 
         // Create regulatory request entity
-        RegulatoryRequest regulatoryRequest = RegulatoryRequest.builder()
+        RegulatoryRequest regulatoryRequest = Objects.requireNonNull(RegulatoryRequest.builder()
                 .requestTitle(request.getRequestTitle())
                 .requestDescription(request.getRequestDescription())
                 .requestType(request.getRequestType())
@@ -54,7 +55,7 @@ public class WorkflowService {
                 .status(ApprovalStatus.PENDING)
                 .submitterId(username)
                 .currentStage("INITIAL_REVIEW")
-                .build();
+                .build());
 
         regulatoryRequest = requestRepository.save(regulatoryRequest);
 
@@ -104,7 +105,7 @@ public class WorkflowService {
 
     @Transactional(readOnly = true)
     public WorkflowResponse getWorkflowById(UUID requestId) {
-        RegulatoryRequest request = requestRepository.findById(requestId)
+        RegulatoryRequest request = requestRepository.findById(Objects.requireNonNull(requestId))
                 .orElseThrow(() -> new ResourceNotFoundException("Request not found with ID: " + requestId));
 
         return buildWorkflowResponse(request, null);
@@ -159,7 +160,7 @@ public class WorkflowService {
     }
 
     private WorkflowResponse buildWorkflowResponse(RegulatoryRequest request, String message) {
-        return WorkflowResponse.builder()
+        return Objects.requireNonNull(WorkflowResponse.builder()
                 .requestId(request.getId())
                 .processInstanceId(request.getProcessInstanceId())
                 .requestTitle(request.getRequestTitle())
@@ -178,6 +179,6 @@ public class WorkflowService {
                 .updatedAt(request.getUpdatedAt())
                 .completedAt(request.getCompletedAt())
                 .message(message)
-                .build();
+                .build());
     }
 }

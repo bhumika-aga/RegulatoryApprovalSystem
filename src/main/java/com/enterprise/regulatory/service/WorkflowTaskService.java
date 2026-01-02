@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -313,7 +314,7 @@ public class WorkflowTaskService {
                 .map(link -> link.getGroupId())
                 .collect(Collectors.toSet());
 
-        return TaskResponse.builder()
+        return Objects.requireNonNull(TaskResponse.builder()
                 .taskId(task.getId())
                 .taskName(task.getName())
                 .taskDefinitionKey(task.getTaskDefinitionKey())
@@ -331,6 +332,6 @@ public class WorkflowTaskService {
                 .riskScore((Integer) variables.get("riskScore"))
                 .riskCategory((String) variables.get("riskCategory"))
                 .escalated((Boolean) variables.get("escalated"))
-                .build();
+                .build());
     }
 }

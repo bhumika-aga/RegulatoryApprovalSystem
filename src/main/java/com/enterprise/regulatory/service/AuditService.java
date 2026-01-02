@@ -2,6 +2,7 @@ package com.enterprise.regulatory.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,7 +33,7 @@ public class AuditService {
             AuditEventType eventType, String oldValue, String newValue,
             String performedBy, String role, String comment) {
         try {
-            WorkflowAudit audit = WorkflowAudit.builder()
+            WorkflowAudit audit = Objects.requireNonNull(WorkflowAudit.builder()
                     .processInstanceId(processInstanceId)
                     .taskId(taskId)
                     .taskName(taskName)
@@ -43,7 +44,7 @@ public class AuditService {
                     .role(role)
                     .comment(comment)
                     .timestamp(LocalDateTime.now())
-                    .build();
+                    .build());
 
             auditRepository.save(audit);
             log.debug("Audit event recorded: {} for process: {}", eventType, processInstanceId);
@@ -60,7 +61,7 @@ public class AuditService {
             String role, String comment, String ipAddress,
             String additionalData) {
         try {
-            WorkflowAudit audit = WorkflowAudit.builder()
+            WorkflowAudit audit = Objects.requireNonNull(WorkflowAudit.builder()
                     .processInstanceId(processInstanceId)
                     .processDefinitionKey(processDefinitionKey)
                     .taskId(taskId)
@@ -74,7 +75,7 @@ public class AuditService {
                     .timestamp(LocalDateTime.now())
                     .ipAddress(ipAddress)
                     .additionalData(additionalData)
-                    .build();
+                    .build());
 
             auditRepository.save(audit);
             log.debug("Detailed audit event recorded: {} for process: {}", eventType, processInstanceId);

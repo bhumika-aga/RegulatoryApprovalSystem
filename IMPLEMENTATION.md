@@ -24,7 +24,7 @@ decoupling, scalability, and resilience.
 ### Why External Workers Only?
 
 | Aspect         | Java Delegates            | External Workers         |
-|----------------|---------------------------|--------------------------|
+| -------------- | ------------------------- | ------------------------ |
 | **Coupling**   | Tightly coupled to engine | Fully decoupled          |
 | **Scaling**    | Scale with engine         | Scale independently      |
 | **Language**   | Java only                 | Any language             |
@@ -40,7 +40,7 @@ decoupling, scalability, and resilience.
 The system uses 5 external task topics:
 
 | Topic                  | Worker                   | Purpose                              |
-|------------------------|--------------------------|--------------------------------------|
+| ---------------------- | ------------------------ | ------------------------------------ |
 | `risk-scoring`         | RiskScoringWorker        | Calculate risk score for requests    |
 | `compliance-check`     | ComplianceCheckWorker    | Validate regulatory compliance       |
 | `escalation-handler`   | EscalationWorker         | Handle SLA breach escalations        |
@@ -55,14 +55,14 @@ Each worker follows a consistent pattern:
 
 @Component
 public class ExampleWorker implements ExternalTaskHandler {
-    
+
     private static final String TOPIC_NAME = "example-topic";
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_TIMEOUT = 5000L;
-    
+
     private final ExternalTaskClient client;
     private TopicSubscription subscription;
-    
+
     @PostConstruct
     public void subscribe() {
         subscription = client.subscribe(TOPIC_NAME)
@@ -70,39 +70,39 @@ public class ExampleWorker implements ExternalTaskHandler {
                            .handler(this)
                            .open();
     }
-    
+
     @PreDestroy
     public void unsubscribe() {
         if (subscription != null) {
             subscription.close();
         }
     }
-    
+
     @Override
     public void execute(ExternalTask task, ExternalTaskService service) {
         try {
             // 1. Extract input variables
             String inputVar = task.getVariable("inputVar");
-            
+
             // 2. Execute business logic
             String result = processTask(inputVar);
-            
+
             // 3. Complete with output variables
             Map<String, Object> variables = new HashMap<>();
             variables.put("outputVar", result);
             service.complete(task, variables);
-        
+
         } catch (Exception e) {
             handleFailure(task, service, e);
         }
     }
-    
+
     private void handleFailure(ExternalTask task,
                                ExternalTaskService service,
                                Exception e) {
         int retries = task.getRetries() != null
             ? task.getRetries() : MAX_RETRIES;
-        
+
         if (retries > 0) {
             // Retry with backoff
             service.handleFailure(task,
@@ -173,7 +173,7 @@ Final Decision → BPMN triggers external task → WorkflowCompletionWorker
 ### 3.1 Process Variables
 
 | Variable           | Type    | Set By               | Used By                             |
-|--------------------|---------|----------------------|-------------------------------------|
+| ------------------ | ------- | -------------------- | ----------------------------------- |
 | `requestId`        | UUID    | WorkflowService      | All workers                         |
 | `requestTitle`     | String  | StartWorkflowRequest | NotificationWorker                  |
 | `requestType`      | String  | StartWorkflowRequest | RiskScoringWorker, ComplianceWorker |
@@ -284,17 +284,17 @@ list();
 
 ### 5.1 Audit Recording Points
 
-| Event              | Trigger              | Component                                     |
-|--------------------|----------------------|-----------------------------------------------|
-| WORKFLOW_STARTED   | Process start        | WorkflowStartListener                         |
-| TASK_CREATED       | User task created    | TaskAuditListener                             |
-| TASK_CLAIMED       | Task assigned        | TaskAuditListener                             |
-| TASK_COMPLETED     | Task completed       | TaskAuditListener                             |
-| SLA_BREACH         | Timer fires          | EscalationWorker                              |
-| TASK_ESCALATED     | Escalation processed | EscalationWorker                              |
-| COMPLIANCE_CHECK_* | Compliance result    | ComplianceCheckWorker                         |
-| DECISION_MADE      | Final decision       | WorkflowCompletionWorker                      |
-| WORKFLOW_COMPLETED | Process ends         | WorkflowCompletionWorker, WorkflowEndListener |
+| Event               | Trigger              | Component                                     |
+| ------------------- | -------------------- | --------------------------------------------- |
+| WORKFLOW_STARTED    | Process start        | WorkflowStartListener                         |
+| TASK_CREATED        | User task created    | TaskAuditListener                             |
+| TASK_CLAIMED        | Task assigned        | TaskAuditListener                             |
+| TASK_COMPLETED      | Task completed       | TaskAuditListener                             |
+| SLA_BREACH          | Timer fires          | EscalationWorker                              |
+| TASK_ESCALATED      | Escalation processed | EscalationWorker                              |
+| COMPLIANCE*CHECK*\* | Compliance result    | ComplianceCheckWorker                         |
+| DECISION_MADE       | Final decision       | WorkflowCompletionWorker                      |
+| WORKFLOW_COMPLETED  | Process ends         | WorkflowCompletionWorker, WorkflowEndListener |
 
 ### 5.2 Audit Service Pattern
 
@@ -302,7 +302,7 @@ list();
 
 @Service
 public class AuditService {
-    
+
     public void recordAuditEvent(
         String processInstanceId,
         String taskId,
@@ -313,7 +313,7 @@ public class AuditService {
         String performedBy,
         String role,
         String comment) {
-        
+
         WorkflowAudit audit = WorkflowAudit.builder()
                                   .id(UUID.randomUUID())
                                   .processInstanceId(processInstanceId)
@@ -327,7 +327,7 @@ public class AuditService {
                                   .comment(comment)
                                   .timestamp(LocalDateTime.now())
                                   .build();
-        
+
         auditRepository.save(audit);
     }
 }
@@ -344,11 +344,11 @@ private void handleFailure(ExternalTask task,
                            ExternalTaskService service,
                            Exception e) {
     int retries = task.getRetries() != null ? task.getRetries() : MAX_RETRIES;
-    
+
     if (retries > 0) {
         // Exponential backoff: 5s, 10s, 15s
         long backoff = RETRY_TIMEOUT * (MAX_RETRIES - retries + 1);
-        
+
         service.handleFailure(task,
             "Error: " + e.getMessage(),
             e.getClass().getName(),
@@ -356,10 +356,10 @@ private void handleFailure(ExternalTask task,
             backoff);
     } else {
         // Different strategies per worker:
-        
+
         // Option 1: Create BPMN error (for critical workers)
         service.handleBpmnError(task, "CRITICAL_ERROR", e.getMessage());
-        
+
         // Option 2: Complete with error flag (for non-critical workers)
         Map<String, Object> vars = Map.of(
             "taskFailed", true,
@@ -373,7 +373,7 @@ private void handleFailure(ExternalTask task,
 ### 6.2 Fallback Behaviors by Worker
 
 | Worker                   | Failure Strategy                 | Rationale                      |
-|--------------------------|----------------------------------|--------------------------------|
+| ------------------------ | -------------------------------- | ------------------------------ |
 | RiskScoringWorker        | Complete with default score (50) | Don't block workflow           |
 | ComplianceCheckWorker    | BPMN error → incident            | Critical for compliance        |
 | EscalationWorker         | Complete with error flag         | Escalation is informational    |
@@ -386,19 +386,19 @@ private void handleFailure(ExternalTask task,
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-    
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                    .body(ApiResponse.error(ex.getMessage()));
     }
-    
+
     @ExceptionHandler(WorkflowException.class)
     public ResponseEntity<ApiResponse<Void>> handleWorkflow(WorkflowException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                    .body(ApiResponse.error(ex.getMessage()));
     }
-    
+
     @ExceptionHandler(TaskOperationException.class)
     public ResponseEntity<ApiResponse<Void>> handleTask(TaskOperationException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -468,7 +468,7 @@ public class GlobalExceptionHandler {
 ## Summary of Components
 
 | Component   | Count | Files                                                  |
-|-------------|-------|--------------------------------------------------------|
+| ----------- | ----- | ------------------------------------------------------ |
 | Controllers | 5     | Auth, Workflow, Task, Audit, Health                    |
 | Services    | 3     | Workflow, WorkflowTask, Audit                          |
 | Workers     | 5     | Risk, Compliance, Escalation, Completion, Notification |
@@ -510,4 +510,148 @@ compliance-check     → ComplianceCheckWorker
 escalation-handler   → EscalationWorker
 workflow-completion  → WorkflowCompletionWorker
 notification-service → NotificationWorker
+```
+
+---
+
+## 8. Camunda Tasklist Forms
+
+The system includes embedded forms for the Camunda Tasklist, allowing users to complete tasks directly from the Camunda webapp.
+
+### Form Files
+
+Located in `src/main/resources/static/forms/`:
+
+| Form File                    | User Task                      | Candidate Group       |
+| ---------------------------- | ------------------------------ | --------------------- |
+| `initial-review.form`        | Initial Review                 | REVIEWER              |
+| `manager-approval.form`      | Manager Approval               | MANAGER               |
+| `senior-manager-review.form` | Senior Manager Review          | SENIOR_MANAGER        |
+| `compliance-review.form`     | Compliance Manual Review       | COMPLIANCE            |
+| `final-approval.form`        | Final Approval                 | ADMIN, SENIOR_MANAGER |
+| `additional-info.form`       | Provide Additional Information | Submitter             |
+
+### Form Structure
+
+Each form uses Camunda's embedded form syntax with `cam-variable-name` attributes:
+
+```html
+<form role="form" class="form-horizontal">
+  <!-- Read-only fields for context -->
+  <div class="form-group">
+    <label class="control-label col-md-3">Request Title</label>
+    <div class="col-md-9">
+      <input
+        type="text"
+        class="form-control"
+        cam-variable-name="requestTitle"
+        cam-variable-type="String"
+        readonly
+      />
+    </div>
+  </div>
+
+  <!-- Decision dropdown -->
+  <div class="form-group">
+    <label class="control-label col-md-3">Decision *</label>
+    <div class="col-md-9">
+      <select
+        class="form-control"
+        cam-variable-name="reviewerDecision"
+        cam-variable-type="String"
+        required
+      >
+        <option value="">-- Select Decision --</option>
+        <option value="APPROVED">Approve</option>
+        <option value="REJECTED">Reject</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Comments -->
+  <div class="form-group">
+    <label class="control-label col-md-3">Comments</label>
+    <div class="col-md-9">
+      <textarea
+        class="form-control"
+        cam-variable-name="reviewerComment"
+        cam-variable-type="String"
+        rows="3"
+      ></textarea>
+    </div>
+  </div>
+</form>
+```
+
+### Using Camunda Tasklist
+
+1. Navigate to <http://localhost:8080/camunda>
+2. Login with `admin` / `admin`
+3. Click **Tasklist**
+4. View tasks assigned to your groups
+5. Click a task to see the embedded form
+6. Make a decision and click **Complete**
+
+---
+
+## 9. Database Configuration
+
+### H2 In-Memory Database
+
+The application uses H2 in-memory database for development simplicity:
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:h2:mem:regulatory_db;DB_CLOSE_DELAY=-1;MODE=LEGACY;NON_KEYWORDS=VALUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+```
+
+**Key Configuration:**
+
+- `DB_CLOSE_DELAY=-1`: Keeps database alive while JVM runs
+- `MODE=LEGACY`: Camunda compatibility mode
+- `NON_KEYWORDS=VALUE`: Prevents SQL keyword conflicts
+
+### Accessing H2 Console
+
+1. Navigate to <http://localhost:8080/h2-console>
+2. JDBC URL: `jdbc:h2:mem:regulatory_db`
+3. Username: `sa`
+4. Password: (empty)
+
+---
+
+## 10. Version Compatibility
+
+| Component    | Version | Notes                                                |
+| ------------ | ------- | ---------------------------------------------------- |
+| Spring Boot  | 3.5.9   | Latest stable                                        |
+| Camunda BPM  | 7.22.0  | Compatible with Spring Boot 3.5.x                    |
+| H2 Database  | 2.3.x   | Via Spring Boot dependency management                |
+| JAXB API     | 2.3.1   | Required for Camunda External Task Client on Java 21 |
+| JAXB Runtime | 2.3.9   | Runtime implementation for JAXB                      |
+
+### JAXB Dependencies (Java 21)
+
+Camunda External Task Client requires JAXB which is not included in Java 21+:
+
+```xml
+<dependency>
+    <groupId>javax.xml.bind</groupId>
+    <artifactId>jaxb-api</artifactId>
+    <version>2.3.1</version>
+</dependency>
+<dependency>
+    <groupId>org.glassfish.jaxb</groupId>
+    <artifactId>jaxb-runtime</artifactId>
+    <version>2.3.9</version>
+    <scope>runtime</scope>
+</dependency>
 ```

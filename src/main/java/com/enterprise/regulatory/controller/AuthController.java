@@ -32,64 +32,64 @@ import lombok.extern.slf4j.Slf4j;
 @Tag(name = "Authentication", description = "JWT token generation endpoints")
 public class AuthController {
 
-    private final JwtTokenProvider tokenProvider;
-    private final JwtProperties jwtProperties;
+        private final JwtTokenProvider tokenProvider;
+        private final JwtProperties jwtProperties;
 
-    @PostMapping("/token")
-    @Operation(summary = "Generate JWT token", description = "Generate a JWT token for testing purposes")
-    public ResponseEntity<ApiResponse<AuthResponse>> generateToken(@Valid @RequestBody AuthRequest request) {
-        log.info("Generating token for user: {}", request.getUsername());
+        @PostMapping("/token")
+        @Operation(summary = "Generate JWT token", description = "Generate a JWT token for testing purposes")
+        public ResponseEntity<ApiResponse<AuthResponse>> generateToken(@Valid @RequestBody AuthRequest request) {
+                log.info("Generating token for user: {}", request.getUsername());
 
-        List<String> roles = request.getRoles() != null && !request.getRoles().isEmpty()
-                ? request.getRoles()
-                : List.of("REVIEWER");
+                List<String> roles = request.getRoles() != null && !request.getRoles().isEmpty()
+                                ? request.getRoles()
+                                : List.of("REVIEWER");
 
-        String accessToken = tokenProvider.generateToken(
-                request.getUsername(),
-                roles,
-                request.getDepartment());
+                String accessToken = tokenProvider.generateToken(
+                                request.getUsername(),
+                                roles,
+                                request.getDepartment());
 
-        String refreshToken = tokenProvider.generateRefreshToken(request.getUsername());
+                String refreshToken = tokenProvider.generateRefreshToken(request.getUsername());
 
-        AuthResponse response = AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtProperties.getExpirationMs() / 1000)
-                .username(request.getUsername())
-                .roles(roles)
-                .department(request.getDepartment())
-                .build();
+                AuthResponse response = AuthResponse.builder()
+                                .accessToken(accessToken)
+                                .refreshToken(refreshToken)
+                                .tokenType("Bearer")
+                                .expiresIn(jwtProperties.getExpirationMs() / 1000)
+                                .username(request.getUsername())
+                                .roles(roles)
+                                .department(request.getDepartment())
+                                .build();
 
-        return ResponseEntity.ok(ApiResponse.success(response, "Token generated successfully"));
-    }
-
-    @PostMapping("/refresh")
-    @Operation(summary = "Refresh JWT token", description = "Refresh an expired JWT token")
-    public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
-            @RequestHeader("X-Refresh-Token") String refreshToken) {
-        if (!tokenProvider.validateToken(refreshToken)) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Invalid or expired refresh token"));
+                return ResponseEntity.ok(ApiResponse.success(response, "Token generated successfully"));
         }
 
-        String username = tokenProvider.getUsernameFromToken(refreshToken);
-        List<String> roles = tokenProvider.getRolesFromToken(refreshToken);
-        String department = tokenProvider.getDepartmentFromToken(refreshToken);
+        @PostMapping("/refresh")
+        @Operation(summary = "Refresh JWT token", description = "Refresh an expired JWT token")
+        public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
+                        @RequestHeader("X-Refresh-Token") String refreshToken) {
+                if (!tokenProvider.validateToken(refreshToken)) {
+                        return ResponseEntity.badRequest()
+                                        .body(ApiResponse.error("Invalid or expired refresh token"));
+                }
 
-        String newAccessToken = tokenProvider.generateToken(username, roles, department);
-        String newRefreshToken = tokenProvider.generateRefreshToken(username);
+                String username = tokenProvider.getUsernameFromToken(refreshToken);
+                List<String> roles = tokenProvider.getRolesFromToken(refreshToken);
+                String department = tokenProvider.getDepartmentFromToken(refreshToken);
 
-        AuthResponse response = AuthResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtProperties.getExpirationMs() / 1000)
-                .username(username)
-                .roles(roles)
-                .department(department)
-                .build();
+                String newAccessToken = tokenProvider.generateToken(username, roles, department);
+                String newRefreshToken = tokenProvider.generateRefreshToken(username);
 
-        return ResponseEntity.ok(ApiResponse.success(response, "Token refreshed successfully"));
-    }
+                AuthResponse response = AuthResponse.builder()
+                                .accessToken(newAccessToken)
+                                .refreshToken(newRefreshToken)
+                                .tokenType("Bearer")
+                                .expiresIn(jwtProperties.getExpirationMs() / 1000)
+                                .username(username)
+                                .roles(roles)
+                                .department(department)
+                                .build();
+
+                return ResponseEntity.ok(ApiResponse.success(response, "Token refreshed successfully"));
+        }
 }

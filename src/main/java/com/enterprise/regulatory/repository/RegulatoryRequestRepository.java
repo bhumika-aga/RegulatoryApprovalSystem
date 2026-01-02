@@ -19,47 +19,47 @@ import com.enterprise.regulatory.model.enums.ApprovalStatus;
 @Repository
 public interface RegulatoryRequestRepository extends JpaRepository<RegulatoryRequest, UUID> {
 
-    Optional<RegulatoryRequest> findByProcessInstanceId(String processInstanceId);
+        Optional<RegulatoryRequest> findByProcessInstanceId(String processInstanceId);
 
-    List<RegulatoryRequest> findBySubmitterIdOrderByCreatedAtDesc(String submitterId);
+        List<RegulatoryRequest> findBySubmitterIdOrderByCreatedAtDesc(String submitterId);
 
-    Page<RegulatoryRequest> findBySubmitterId(String submitterId, Pageable pageable);
+        Page<RegulatoryRequest> findBySubmitterId(String submitterId, Pageable pageable);
 
-    List<RegulatoryRequest> findByStatusOrderByCreatedAtDesc(ApprovalStatus status);
+        List<RegulatoryRequest> findByStatusOrderByCreatedAtDesc(ApprovalStatus status);
 
-    Page<RegulatoryRequest> findByStatus(ApprovalStatus status, Pageable pageable);
+        Page<RegulatoryRequest> findByStatus(ApprovalStatus status, Pageable pageable);
 
-    List<RegulatoryRequest> findByCurrentAssigneeOrderByCreatedAtDesc(String assignee);
+        List<RegulatoryRequest> findByCurrentAssigneeOrderByCreatedAtDesc(String assignee);
 
-    List<RegulatoryRequest> findByDepartmentOrderByCreatedAtDesc(String department);
+        List<RegulatoryRequest> findByDepartmentOrderByCreatedAtDesc(String department);
 
-    @Query("SELECT r FROM RegulatoryRequest r WHERE r.escalated = true ORDER BY r.escalatedAt DESC")
-    List<RegulatoryRequest> findEscalatedRequests();
+        @Query("SELECT r FROM RegulatoryRequest r WHERE r.escalated = true ORDER BY r.escalatedAt DESC")
+        List<RegulatoryRequest> findEscalatedRequests();
 
-    @Query("SELECT r FROM RegulatoryRequest r WHERE r.status IN :statuses ORDER BY r.createdAt DESC")
-    List<RegulatoryRequest> findByStatusIn(@Param("statuses") List<ApprovalStatus> statuses);
+        @Query("SELECT r FROM RegulatoryRequest r WHERE r.status IN :statuses ORDER BY r.createdAt DESC")
+        List<RegulatoryRequest> findByStatusIn(@Param("statuses") List<ApprovalStatus> statuses);
 
-    @Query("SELECT r FROM RegulatoryRequest r WHERE r.createdAt BETWEEN :startDate AND :endDate ORDER BY r.createdAt DESC")
-    List<RegulatoryRequest> findByDateRange(
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate);
+        @Query("SELECT r FROM RegulatoryRequest r WHERE r.createdAt BETWEEN :startDate AND :endDate ORDER BY r.createdAt DESC")
+        List<RegulatoryRequest> findByDateRange(
+                        @Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate);
 
-    @Query("SELECT COUNT(r) FROM RegulatoryRequest r WHERE r.status = :status")
-    long countByStatus(@Param("status") ApprovalStatus status);
+        @Query("SELECT COUNT(r) FROM RegulatoryRequest r WHERE r.status = :status")
+        long countByStatus(@Param("status") ApprovalStatus status);
 
-    @Query("SELECT r.department, COUNT(r) FROM RegulatoryRequest r GROUP BY r.department")
-    List<Object[]> countByDepartment();
+        @Query("SELECT r.department, COUNT(r) FROM RegulatoryRequest r GROUP BY r.department")
+        List<Object[]> countByDepartment();
 
-    @Modifying
-    @Query("UPDATE RegulatoryRequest r SET r.currentAssignee = :assignee, r.updatedAt = CURRENT_TIMESTAMP WHERE r.processInstanceId = :processInstanceId")
-    int updateCurrentAssignee(
-            @Param("processInstanceId") String processInstanceId,
-            @Param("assignee") String assignee);
+        @Modifying
+        @Query("UPDATE RegulatoryRequest r SET r.currentAssignee = :assignee, r.updatedAt = CURRENT_TIMESTAMP WHERE r.processInstanceId = :processInstanceId")
+        int updateCurrentAssignee(
+                        @Param("processInstanceId") String processInstanceId,
+                        @Param("assignee") String assignee);
 
-    @Modifying
-    @Query("UPDATE RegulatoryRequest r SET r.status = :status, r.currentStage = :stage, r.updatedAt = CURRENT_TIMESTAMP WHERE r.processInstanceId = :processInstanceId")
-    int updateStatusAndStage(
-            @Param("processInstanceId") String processInstanceId,
-            @Param("status") ApprovalStatus status,
-            @Param("stage") String stage);
+        @Modifying
+        @Query("UPDATE RegulatoryRequest r SET r.status = :status, r.currentStage = :stage, r.updatedAt = CURRENT_TIMESTAMP WHERE r.processInstanceId = :processInstanceId")
+        int updateStatusAndStage(
+                        @Param("processInstanceId") String processInstanceId,
+                        @Param("status") ApprovalStatus status,
+                        @Param("stage") String stage);
 }
