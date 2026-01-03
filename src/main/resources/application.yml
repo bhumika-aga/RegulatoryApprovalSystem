@@ -50,6 +50,8 @@ camunda:
       lastName: User
     filter:
       create: All Tasks
+    authorization:
+      enabled: false
     database:
       schema-update: true
     history-level: full

@@ -50,7 +50,9 @@ public class SecurityConfig {
 
                         // Camunda webapp (protected by Camunda's own auth in production)
                         .requestMatchers("/camunda/**").permitAll()
+                        .requestMatchers("/camunda-welcome/**").permitAll()
                         .requestMatchers("/engine-rest/**").permitAll()
+                        .requestMatchers("/forms/**").permitAll()
 
                         // H2 Console (development only)
                         .requestMatchers("/h2-console/**").permitAll()

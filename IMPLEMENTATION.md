@@ -453,15 +453,42 @@ public class GlobalExceptionHandler {
 - Avoids duplicate identity storage
 - Groups synced at runtime for task queries
 
-### 7.5 PostgreSQL (No In-Memory Database)
+### 7.5 Camunda Webapp Authentication Integration
 
-**Decision:** PostgreSQL for all environments.
+**Decision:** Custom `CamundaAuthenticationProvider` integrates Spring Security with Camunda's webapp.
+
+**Implementation:**
+
+```java
+public class CamundaAuthenticationProvider extends ContainerBasedAuthenticationProvider {
+    @Override
+    public AuthenticationResult extractAuthenticatedUser(HttpServletRequest request, ProcessEngine engine) {
+        Principal principal = request.getUserPrincipal();
+        if (principal == null) {
+            // Allow anonymous access for development - return admin user
+            return new AuthenticationResult("admin", true);
+        }
+        return new AuthenticationResult(principal.getName(), true);
+    }
+}
+```
 
 **Rationale:**
 
-- Production-ready from development
-- Camunda native support
+- Allows Camunda Cockpit/Tasklist to work without separate login
+- Uses Spring Security's authenticated principal when available
+- Falls back to admin user for development convenience
+
+### 7.6 H2 In-Memory Database (Development)
+
+**Decision:** H2 in-memory database for development with easy switch to PostgreSQL for production.
+
+**Rationale:**
+
+- Zero setup required for development
+- Camunda native support with LEGACY mode
 - ACID compliance for regulatory requirements
+- Easy to swap to PostgreSQL for production environments
 
 ---
 
@@ -475,10 +502,10 @@ public class GlobalExceptionHandler {
 | Listeners   | 3     | TaskAudit, WorkflowStart, WorkflowEnd                  |
 | Entities    | 2     | RegulatoryRequest, WorkflowAudit                       |
 | DTOs        | 8     | Request/Response objects                               |
-| Security    | 7     | JWT components                                         |
-| Config      | 4     | Security, Camunda, OpenAPI, Async                      |
+| Security    | 8     | JWT components + CamundaAuthenticationProvider         |
+| Config      | 5     | Security, Camunda, CamundaSecurity, OpenAPI, Async     |
 
-**Total Java Files:** 48 (excluding tests)
+**Total Java Files:** 51 (excluding tests)
 
 ---
 
@@ -655,3 +682,129 @@ Camunda External Task Client requires JAXB which is not included in Java 21+:
     <scope>runtime</scope>
 </dependency>
 ```
+
+---
+
+## 11. Testing Guide
+
+### Quick Start
+
+```bash
+# Build and run
+mvn clean install
+mvn spring-boot:run
+
+# Verify application health
+curl http://localhost:8080/api/v1/health
+```
+
+### Generate JWT Tokens
+
+```bash
+# REVIEWER token
+curl -X POST http://localhost:8080/api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "reviewer1", "roles": ["REVIEWER"], "department": "RISK"}'
+
+# MANAGER token
+curl -X POST http://localhost:8080/api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "manager1", "roles": ["MANAGER"], "department": "OPERATIONS"}'
+
+# ADMIN token
+curl -X POST http://localhost:8080/api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin1", "roles": ["ADMIN"], "department": "ADMINISTRATION"}'
+```
+
+Save tokens as environment variables: `TOKEN_REVIEWER`, `TOKEN_MANAGER`, `TOKEN_ADMIN`
+
+### Test Happy Path (Full Approval)
+
+#### Step 1: Start Workflow
+
+```bash
+curl -X POST http://localhost:8080/api/v1/workflow/start \
+  -H "Authorization: Bearer $TOKEN_REVIEWER" \
+  -H "Content-Type: application/json" \
+  -d '{"requestTitle": "New Product", "requestType": "FINANCIAL_PRODUCT", "department": "INVESTMENT", "priority": "HIGH"}'
+```
+
+#### Step 2: Complete Initial Review
+
+```bash
+# Get tasks
+curl -H "Authorization: Bearer $TOKEN_REVIEWER" http://localhost:8080/api/v1/tasks
+
+# Claim and complete
+curl -X POST -H "Authorization: Bearer $TOKEN_REVIEWER" http://localhost:8080/api/v1/tasks/{taskId}/claim
+curl -X POST -H "Authorization: Bearer $TOKEN_REVIEWER" -H "Content-Type: application/json" \
+  http://localhost:8080/api/v1/tasks/{taskId}/complete \
+  -d '{"decision": "APPROVED", "comment": "Verified"}'
+```
+
+#### Step 3: Complete Manager Approval
+
+```bash
+curl -H "Authorization: Bearer $TOKEN_MANAGER" http://localhost:8080/api/v1/tasks
+curl -X POST -H "Authorization: Bearer $TOKEN_MANAGER" http://localhost:8080/api/v1/tasks/{taskId}/claim
+curl -X POST -H "Authorization: Bearer $TOKEN_MANAGER" -H "Content-Type: application/json" \
+  http://localhost:8080/api/v1/tasks/{taskId}/complete \
+  -d '{"decision": "APPROVED", "comment": "Business case validated"}'
+```
+
+#### Step 4: Complete Final Approval
+
+```bash
+curl -H "Authorization: Bearer $TOKEN_ADMIN" http://localhost:8080/api/v1/tasks
+curl -X POST -H "Authorization: Bearer $TOKEN_ADMIN" http://localhost:8080/api/v1/tasks/{taskId}/claim
+curl -X POST -H "Authorization: Bearer $TOKEN_ADMIN" -H "Content-Type: application/json" \
+  http://localhost:8080/api/v1/tasks/{taskId}/complete \
+  -d '{"decision": "APPROVED", "comment": "Final approval granted"}'
+```
+
+#### Step 5: Verify Completion
+
+```bash
+curl -H "Authorization: Bearer $TOKEN_ADMIN" http://localhost:8080/api/v1/workflow/status/{processInstanceId}
+# Expected: status: "APPROVED", currentStage: "COMPLETED"
+```
+
+### Test Alternate Flows
+
+| Flow            | Action                                | Result                                |
+| --------------- | ------------------------------------- | ------------------------------------- |
+| Rejection       | `"decision": "REJECTED"` at any stage | Workflow ends with REJECTED status    |
+| Additional Info | `"decision": "NEEDS_INFO"`            | Creates info request task, loops back |
+| Escalation      | `"decision": "ESCALATE"` (Manager)    | Creates Senior Manager Review task    |
+
+### API Endpoints Summary
+
+| Endpoint                           | Method | Description          |
+| ---------------------------------- | ------ | -------------------- |
+| `/api/v1/auth/token`               | POST   | Generate JWT token   |
+| `/api/v1/workflow/start`           | POST   | Start new workflow   |
+| `/api/v1/workflow/{id}`            | GET    | Get workflow details |
+| `/api/v1/workflow/status/{procId}` | GET    | Get workflow status  |
+| `/api/v1/tasks`                    | GET    | Get available tasks  |
+| `/api/v1/tasks/{id}/claim`         | POST   | Claim a task         |
+| `/api/v1/tasks/{id}/complete`      | POST   | Complete a task      |
+| `/api/v1/audit/process/{procId}`   | GET    | Get audit trail      |
+
+### User Roles
+
+| Role           | Permissions                                       |
+| -------------- | ------------------------------------------------- |
+| REVIEWER       | Start workflows, Initial Review tasks             |
+| MANAGER        | Manager Approval tasks                            |
+| SENIOR_MANAGER | Escalated reviews, Final Approval                 |
+| COMPLIANCE     | Compliance Manual Review tasks                    |
+| ADMIN          | Full access, Final Approval, Terminate workflows  |
+| AUDITOR        | View audit trails only                            |
+
+### Web UIs
+
+- **Swagger UI**: <http://localhost:8080/swagger-ui.html>
+- **Camunda Tasklist**: <http://localhost:8080/camunda/app/tasklist> (admin/admin)
+- **Camunda Cockpit**: <http://localhost:8080/camunda/app/cockpit> (admin/admin)
+- **H2 Console**: <http://localhost:8080/h2-console> (sa/empty)

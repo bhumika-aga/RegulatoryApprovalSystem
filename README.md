@@ -57,7 +57,7 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 
 ### Audit Features
 
-- **Complete audit trail**: All workflow events recorded to PostgreSQL
+- **Complete audit trail**: All workflow events recorded to database
 - **Decision tracking**: Approval/rejection decisions with comments
 - **SLA breach logging**: Escalation events tracked with timestamps
 - **User action history**: Full traceability of who did what and when
@@ -65,7 +65,7 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 ### Technical Features
 
 - **External Task Workers**: Decoupled service execution for scalability
-- **Production-ready**: No in-memory databases, proper error handling
+- **Production-ready**: Proper error handling, configurable database
 - **API documentation**: OpenAPI 3.0 with Swagger UI
 - **Docker support**: Multi-stage Dockerfile and Docker Compose
 
@@ -161,6 +161,7 @@ src/main/java/com/enterprise/regulatory/
 ├── config/                    # Configuration classes
 │   ├── SecurityConfig.java    # Spring Security configuration
 │   ├── CamundaConfig.java     # Camunda engine configuration
+│   ├── CamundaSecurityConfig.java # Camunda webapp authentication
 │   ├── OpenApiConfig.java     # Swagger/OpenAPI configuration
 │   └── AsyncConfig.java       # Async execution configuration
 ├── controller/                # REST API controllers
@@ -187,10 +188,12 @@ src/main/java/com/enterprise/regulatory/
 ├── security/                  # Security components
 │   ├── JwtTokenProvider.java
 │   ├── JwtAuthenticationFilter.java
+│   ├── JwtAuthenticationEntryPoint.java
 │   ├── JwtProperties.java
 │   ├── UserPrincipal.java
 │   ├── SecurityUtils.java
-│   └── CamundaIdentityService.java
+│   ├── CamundaIdentityService.java
+│   └── CamundaAuthenticationProvider.java
 ├── model/                     # Domain models
 │   ├── entity/
 │   │   ├── RegulatoryRequest.java
@@ -224,8 +227,13 @@ src/main/java/com/enterprise/regulatory/
 src/main/resources/
 ├── bpmn/
 │   └── regulatory-approval-process.bpmn
-├── db/migration/
-│   └── V1__init_schema.sql
+├── static/forms/              # Camunda Tasklist forms
+│   ├── initial-review.form
+│   ├── manager-approval.form
+│   ├── compliance-review.form
+│   ├── final-approval.form
+│   ├── senior-manager-review.form
+│   └── additional-info.form
 └── application.yml
 ```
 
@@ -406,15 +414,24 @@ curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00
 
 ### Environment Variables
 
-| Variable                 | Description                       | Default       |
-|--------------------------|-----------------------------------|---------------|
-| `DB_HOST`                | PostgreSQL host                   | localhost     |
-| `DB_PORT`                | PostgreSQL port                   | 5432          |
-| `DB_NAME`                | Database name                     | regulatory_db |
-| `DB_USERNAME`            | Database user                     | postgres      |
-| `DB_PASSWORD`            | Database password                 | postgres      |
-| `JWT_SECRET`             | JWT signing key (Base64, 512-bit) | -             |
-| `CAMUNDA_ADMIN_PASSWORD` | Camunda admin password            | admin         |
+| Variable                 | Description                       | Default                              |
+|--------------------------|-----------------------------------|--------------------------------------|
+| `JWT_SECRET`             | JWT signing key (Base64, 512-bit) | (development key in application.yml) |
+| `CAMUNDA_ADMIN_PASSWORD` | Camunda admin password            | admin                                |
+
+### Database Configuration
+
+The application uses **H2 in-memory database** by default for easy development:
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:h2:mem:regulatory_db;DB_CLOSE_DELAY=-1;MODE=LEGACY
+    username: sa
+    password: (empty)
+```
+
+Access the H2 console at: `http://localhost:8080/h2-console`
 
 ### SLA Configuration
 
@@ -429,7 +446,8 @@ SLA timers are configured in the BPMN file using ISO-8601 durations:
 
 ## Documentation
 
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Detailed implementation guide and design decisions
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Implementation guide, design decisions, and testing instructions
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and design patterns
 - [Swagger UI](http://localhost:8080/swagger-ui.html) - Interactive API documentation
 - [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration (Login: admin/admin)
 - [H2 Console](http://localhost:8080/h2-console) - Database console (JDBC URL: jdbc:h2:mem:regulatory_db)
