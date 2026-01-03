@@ -1,0 +1,50 @@
+{
+  "id": "additional-info",
+  "schemaVersion": 2,
+  "components": [
+    {
+      "text": "# Provide Additional Information\n\nThe reviewer has requested additional information for your request.",
+      "type": "text",
+      "id": "header"
+    },
+    {
+      "label": "Request Title",
+      "type": "textfield",
+      "id": "requestTitle",
+      "key": "requestTitle",
+      "disabled": true
+    },
+    {
+      "label": "Request Type",
+      "type": "textfield",
+      "id": "requestType",
+      "key": "requestType",
+      "disabled": true
+    },
+    {
+      "label": "Reviewer Comments",
+      "type": "textarea",
+      "id": "reviewerComment",
+      "key": "reviewerComment",
+      "disabled": true
+    },
+    {
+      "text": "---",
+      "type": "text",
+      "id": "separator"
+    },
+    {
+      "label": "Additional Information",
+      "type": "textarea",
+      "id": "additionalInfo",
+      "key": "additionalInfo",
+      "validate": {
+        "required": true
+      },
+      "properties": {
+        "rows": 5
+      }
+    }
+  ],
+  "type": "default"
+}

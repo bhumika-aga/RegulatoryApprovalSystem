@@ -1,0 +1,88 @@
+{
+  "id": "initial-review",
+  "schemaVersion": 2,
+  "components": [
+    {
+      "text": "# Initial Review\n\nReview the regulatory request and make a decision.",
+      "type": "text",
+      "id": "header"
+    },
+    {
+      "label": "Request Title",
+      "type": "textfield",
+      "id": "requestTitle",
+      "key": "requestTitle",
+      "disabled": true
+    },
+    {
+      "label": "Request Type",
+      "type": "textfield",
+      "id": "requestType",
+      "key": "requestType",
+      "disabled": true
+    },
+    {
+      "label": "Department",
+      "type": "textfield",
+      "id": "department",
+      "key": "department",
+      "disabled": true
+    },
+    {
+      "label": "Priority",
+      "type": "textfield",
+      "id": "priority",
+      "key": "priority",
+      "disabled": true
+    },
+    {
+      "label": "Risk Score",
+      "type": "number",
+      "id": "riskScore",
+      "key": "riskScore",
+      "disabled": true
+    },
+    {
+      "label": "Risk Category",
+      "type": "textfield",
+      "id": "riskCategory",
+      "key": "riskCategory",
+      "disabled": true
+    },
+    {
+      "text": "---",
+      "type": "text",
+      "id": "separator"
+    },
+    {
+      "label": "Decision",
+      "type": "select",
+      "id": "reviewerDecision",
+      "key": "reviewerDecision",
+      "validate": {
+        "required": true
+      },
+      "values": [
+        {
+          "label": "Approve - Forward to Manager",
+          "value": "APPROVED"
+        },
+        {
+          "label": "Reject - End Process",
+          "value": "REJECTED"
+        },
+        {
+          "label": "Request Additional Information",
+          "value": "NEEDS_INFO"
+        }
+      ]
+    },
+    {
+      "label": "Comments",
+      "type": "textarea",
+      "id": "reviewerComment",
+      "key": "reviewerComment"
+    }
+  ],
+  "type": "default"
+}

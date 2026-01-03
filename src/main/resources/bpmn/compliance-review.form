@@ -1,0 +1,77 @@
+{
+  "id": "compliance-review",
+  "schemaVersion": 2,
+  "components": [
+    {
+      "text": "# Compliance Manual Review\n\nReview compliance requirements and make a decision.",
+      "type": "text",
+      "id": "header"
+    },
+    {
+      "label": "Request Title",
+      "type": "textfield",
+      "id": "requestTitle",
+      "key": "requestTitle",
+      "disabled": true
+    },
+    {
+      "label": "Request Type",
+      "type": "textfield",
+      "id": "requestType",
+      "key": "requestType",
+      "disabled": true
+    },
+    {
+      "label": "Risk Score",
+      "type": "number",
+      "id": "riskScore",
+      "key": "riskScore",
+      "disabled": true
+    },
+    {
+      "label": "Compliance Result",
+      "type": "textfield",
+      "id": "complianceResult",
+      "key": "complianceResult",
+      "disabled": true
+    },
+    {
+      "label": "Compliance Notes",
+      "type": "textarea",
+      "id": "complianceNotes",
+      "key": "complianceNotes",
+      "disabled": true
+    },
+    {
+      "text": "---",
+      "type": "text",
+      "id": "separator"
+    },
+    {
+      "label": "Decision",
+      "type": "select",
+      "id": "manualComplianceDecision",
+      "key": "manualComplianceDecision",
+      "validate": {
+        "required": true
+      },
+      "values": [
+        {
+          "label": "Pass - Forward to Final Approval",
+          "value": "PASS"
+        },
+        {
+          "label": "Fail - Reject Request",
+          "value": "FAIL"
+        }
+      ]
+    },
+    {
+      "label": "Comments",
+      "type": "textarea",
+      "id": "complianceReviewComment",
+      "key": "complianceReviewComment"
+    }
+  ],
+  "type": "default"
+}

@@ -1,0 +1,88 @@
+{
+  "id": "manager-approval",
+  "schemaVersion": 2,
+  "components": [
+    {
+      "text": "# Manager Approval\n\nReview and approve or escalate this request.",
+      "type": "text",
+      "id": "header"
+    },
+    {
+      "label": "Request Title",
+      "type": "textfield",
+      "id": "requestTitle",
+      "key": "requestTitle",
+      "disabled": true
+    },
+    {
+      "label": "Request Type",
+      "type": "textfield",
+      "id": "requestType",
+      "key": "requestType",
+      "disabled": true
+    },
+    {
+      "label": "Department",
+      "type": "textfield",
+      "id": "department",
+      "key": "department",
+      "disabled": true
+    },
+    {
+      "label": "Risk Score",
+      "type": "number",
+      "id": "riskScore",
+      "key": "riskScore",
+      "disabled": true
+    },
+    {
+      "label": "Reviewer Decision",
+      "type": "textfield",
+      "id": "reviewerDecision",
+      "key": "reviewerDecision",
+      "disabled": true
+    },
+    {
+      "label": "Reviewer Comments",
+      "type": "textarea",
+      "id": "reviewerComment",
+      "key": "reviewerComment",
+      "disabled": true
+    },
+    {
+      "text": "---",
+      "type": "text",
+      "id": "separator"
+    },
+    {
+      "label": "Decision",
+      "type": "select",
+      "id": "managerDecision",
+      "key": "managerDecision",
+      "validate": {
+        "required": true
+      },
+      "values": [
+        {
+          "label": "Approve - Forward to Compliance",
+          "value": "APPROVED"
+        },
+        {
+          "label": "Reject - End Process",
+          "value": "REJECTED"
+        },
+        {
+          "label": "Escalate to Senior Manager",
+          "value": "ESCALATE"
+        }
+      ]
+    },
+    {
+      "label": "Comments",
+      "type": "textarea",
+      "id": "managerComment",
+      "key": "managerComment"
+    }
+  ],
+  "type": "default"
+}

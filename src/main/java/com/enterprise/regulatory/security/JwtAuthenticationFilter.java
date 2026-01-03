@@ -84,7 +84,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 path.equals("/api/v1/health") ||
                 path.startsWith("/camunda/") ||
                 path.startsWith("/camunda-welcome") ||
-                path.startsWith("/engine-rest/") ||
-                path.startsWith("/forms/");
+                path.startsWith("/engine-rest/");
     }
 }

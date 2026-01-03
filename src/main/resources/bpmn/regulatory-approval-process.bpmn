@@ -57,7 +57,8 @@
     <!-- User Task: Initial Reviewer Review (8 hours SLA) -->
     <bpmn:userTask id="Task_InitialReview" name="Initial Review"
       camunda:candidateGroups="REVIEWER"
-      camunda:formKey="embedded:app:forms/initial-review.form">
+      camunda:formRef="initial-review"
+      camunda:formRefBinding="latest">
       <bpmn:extensionElements>
         <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
           event="create" />
@@ -119,7 +120,8 @@
     <!-- User Task: Request Additional Information -->
     <bpmn:userTask id="Task_RequestInfo" name="Provide Additional Information"
       camunda:assignee="${submitterId}"
-      camunda:formKey="embedded:app:forms/additional-info.form">
+      camunda:formRef="additional-info"
+      camunda:formRefBinding="latest">
       <bpmn:extensionElements>
         <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
           event="create" />
@@ -133,7 +135,8 @@
     <!-- User Task: Manager Approval (24 hours SLA) -->
     <bpmn:userTask id="Task_ManagerApproval" name="Manager Approval"
       camunda:candidateGroups="MANAGER"
-      camunda:formKey="embedded:app:forms/manager-approval.form">
+      camunda:formRef="manager-approval"
+      camunda:formRefBinding="latest">
       <bpmn:extensionElements>
         <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
           event="create" />
@@ -195,7 +198,8 @@
     <!-- User Task: Senior Manager Review (for escalated cases) -->
     <bpmn:userTask id="Task_SeniorManagerReview" name="Senior Manager Review"
       camunda:candidateGroups="SENIOR_MANAGER"
-      camunda:formKey="embedded:app:forms/senior-manager-review.form">
+      camunda:formRef="senior-manager-review"
+      camunda:formRefBinding="latest">
       <bpmn:extensionElements>
         <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
           event="create" />
@@ -280,7 +284,8 @@
     <!-- User Task: Compliance Manual Review -->
     <bpmn:userTask id="Task_ComplianceManualReview" name="Compliance Manual Review"
       camunda:candidateGroups="COMPLIANCE"
-      camunda:formKey="embedded:app:forms/compliance-review.form">
+      camunda:formRef="compliance-review"
+      camunda:formRefBinding="latest">
       <bpmn:extensionElements>
         <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
           event="create" />
@@ -303,7 +308,8 @@
     <!-- User Task: Final Approval (8 hours SLA) -->
     <bpmn:userTask id="Task_FinalApproval" name="Final Approval"
       camunda:candidateGroups="ADMIN,SENIOR_MANAGER"
-      camunda:formKey="embedded:app:forms/final-approval.form">
+      camunda:formRef="final-approval"
+      camunda:formRefBinding="latest">
       <bpmn:extensionElements>
         <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
           event="create" />

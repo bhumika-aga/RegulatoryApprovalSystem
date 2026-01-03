@@ -52,7 +52,6 @@ public class SecurityConfig {
                         .requestMatchers("/camunda/**").permitAll()
                         .requestMatchers("/camunda-welcome/**").permitAll()
                         .requestMatchers("/engine-rest/**").permitAll()
-                        .requestMatchers("/forms/**").permitAll()
 
                         // H2 Console (development only)
                         .requestMatchers("/h2-console/**").permitAll()

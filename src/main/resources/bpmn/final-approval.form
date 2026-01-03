@@ -1,0 +1,91 @@
+{
+  "id": "final-approval",
+  "schemaVersion": 2,
+  "components": [
+    {
+      "text": "# Final Approval\n\nThis is the final approval step for the regulatory request.",
+      "type": "text",
+      "id": "header"
+    },
+    {
+      "label": "Request Title",
+      "type": "textfield",
+      "id": "requestTitle",
+      "key": "requestTitle",
+      "disabled": true
+    },
+    {
+      "label": "Request Type",
+      "type": "textfield",
+      "id": "requestType",
+      "key": "requestType",
+      "disabled": true
+    },
+    {
+      "label": "Department",
+      "type": "textfield",
+      "id": "department",
+      "key": "department",
+      "disabled": true
+    },
+    {
+      "label": "Risk Score",
+      "type": "number",
+      "id": "riskScore",
+      "key": "riskScore",
+      "disabled": true
+    },
+    {
+      "label": "Compliance Result",
+      "type": "textfield",
+      "id": "complianceResult",
+      "key": "complianceResult",
+      "disabled": true
+    },
+    {
+      "label": "Reviewer Decision",
+      "type": "textfield",
+      "id": "reviewerDecision",
+      "key": "reviewerDecision",
+      "disabled": true
+    },
+    {
+      "label": "Manager Decision",
+      "type": "textfield",
+      "id": "managerDecision",
+      "key": "managerDecision",
+      "disabled": true
+    },
+    {
+      "text": "---",
+      "type": "text",
+      "id": "separator"
+    },
+    {
+      "label": "Final Decision",
+      "type": "select",
+      "id": "finalDecision",
+      "key": "finalDecision",
+      "validate": {
+        "required": true
+      },
+      "values": [
+        {
+          "label": "Approve Request",
+          "value": "APPROVED"
+        },
+        {
+          "label": "Reject Request",
+          "value": "REJECTED"
+        }
+      ]
+    },
+    {
+      "label": "Final Comments",
+      "type": "textarea",
+      "id": "finalComment",
+      "key": "finalComment"
+    }
+  ],
+  "type": "default"
+}
