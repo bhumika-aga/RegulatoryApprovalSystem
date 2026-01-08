@@ -13,6 +13,8 @@ import jakarta.servlet.http.HttpServletRequest;
  * Custom authentication provider for Camunda that integrates with Spring
  * Security.
  * Uses the authenticated principal from Spring Security context.
+ *
+ * Security: Requires valid authentication - no anonymous access allowed.
  */
 public class CamundaAuthenticationProvider extends ContainerBasedAuthenticationProvider {
 
@@ -21,10 +23,7 @@ public class CamundaAuthenticationProvider extends ContainerBasedAuthenticationP
         Principal principal = request.getUserPrincipal();
 
         if (principal == null) {
-            // Allow anonymous access for development - return admin user
-            AuthenticationResult result = new AuthenticationResult("admin", true);
-            result.setGroups(List.of("camunda-admin"));
-            return result;
+            return AuthenticationResult.unsuccessful();
         }
 
         String name = principal.getName();

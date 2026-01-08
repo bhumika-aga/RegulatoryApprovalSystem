@@ -1,0 +1,25 @@
+# Render Blueprint - Regulatory Approval System
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: regulatory-approval-system
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /api/v1/health
+    envVars:
+      # Required: JWT signing key (Base64 encoded, min 512-bit)
+      # Generate with: openssl rand -base64 64
+      - key: JWT_SECRET
+        sync: false
+      # Required: Camunda admin password
+      - key: CAMUNDA_ADMIN_PASSWORD
+        sync: false
+      # Optional: CORS allowed origins (comma-separated)
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://your-domain.onrender.com
+      # Server port (Render uses PORT env var)
+      - key: PORT
+        value: 8080

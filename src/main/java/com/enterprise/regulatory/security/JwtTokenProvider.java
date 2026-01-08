@@ -27,7 +27,12 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(JwtProperties jwtProperties) {
         this.jwtProperties = jwtProperties;
-        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtProperties.getSecretKey()));
+        // Strip whitespace/newlines and convert URL-safe Base64 to standard Base64
+        String cleanedSecret = jwtProperties.getSecretKey()
+                .replaceAll("\\s+", "")  // Remove whitespace/newlines
+                .replace('-', '+')        // URL-safe to standard Base64
+                .replace('_', '/');       // URL-safe to standard Base64
+        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(cleanedSecret));
     }
 
     public String generateToken(String username, List<String> roles, String department) {

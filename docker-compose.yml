@@ -7,12 +7,22 @@ services:
       dockerfile: Dockerfile
     container_name: regulatory-app
     environment:
-      JWT_SECRET: ${JWT_SECRET:-dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tc2lnbmluZy1hdC1sZWFzdC01MTItYml0cw==}
-      CAMUNDA_ADMIN_PASSWORD: ${CAMUNDA_ADMIN_PASSWORD:-admin}
+      # Required environment variables - must be set before running
+      # JWT_SECRET: Generate with: openssl rand -base64 64
+      # CAMUNDA_ADMIN_PASSWORD: Set a secure password
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required}
+      CAMUNDA_ADMIN_PASSWORD: ${CAMUNDA_ADMIN_PASSWORD:?CAMUNDA_ADMIN_PASSWORD environment variable is required}
     ports:
       - "8080:8080"
     networks:
       - regulatory-network
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 networks:
   regulatory-network:

@@ -45,7 +45,7 @@ camunda:
   bpm:
     admin-user:
       id: admin
-      password: ${CAMUNDA_ADMIN_PASSWORD:admin}
+      password: ${CAMUNDA_ADMIN_PASSWORD}
       firstName: Admin
       lastName: User
     filter:
@@ -71,10 +71,12 @@ camunda:
       worker-id: regulatory-worker-${random.uuid}
 
 # JWT Security Configuration
+# IMPORTANT: JWT_SECRET must be set as environment variable in production
+# Generate a secure key: openssl rand -base64 64
 app:
   security:
     jwt:
-      secret-key: ${JWT_SECRET:dGhpcy1pcy1hLXZlcnktbG9uZy1zZWNyZXQta2V5LWZvci1qd3QtdG9rZW4tc2lnbmluZy1hdC1sZWFzdC01MTItYml0cw==}
+      secret-key: ${JWT_SECRET}
       expiration-ms: 86400000 # 24 hours
       refresh-expiration-ms: 604800000 # 7 days
       issuer: regulatory-approval-system

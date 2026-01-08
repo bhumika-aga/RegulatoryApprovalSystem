@@ -5,9 +5,7 @@
 [![Camunda](https://img.shields.io/badge/Camunda-7.22.0-blue.svg)](https://camunda.com/)
 [![H2](https://img.shields.io/badge/H2-In--Memory-blue.svg)](https://www.h2database.com/)
 
-An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system
-simulates regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare
-domains.
+An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system implements regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare domains using the **External Task Worker pattern** for maximum scalability and decoupling.
 
 ## Table of Contents
 
@@ -17,6 +15,7 @@ domains.
 - [Technology Stack](#technology-stack)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
+- [Deployment](#deployment)
 - [API Reference](#api-reference)
 - [Workflow Stages](#workflow-stages)
 - [Security](#security)
@@ -54,6 +53,7 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 - **Role-based authorization**: 6 distinct roles with granular permissions
 - **Method-level security**: Spring Security `@PreAuthorize` annotations
 - **Camunda identity integration**: JWT roles synced to Camunda groups at runtime
+- **No hardcoded secrets**: All sensitive configuration via environment variables
 
 ### Audit Features
 
@@ -64,10 +64,11 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 
 ### Technical Features
 
-- **External Task Workers**: Decoupled service execution for scalability
-- **Production-ready**: Proper error handling, configurable database
+- **External Task Workers**: Decoupled service execution for scalability (no Java Delegates)
+- **Production-ready**: Proper error handling, health checks, container-optimized
 - **API documentation**: OpenAPI 3.0 with Swagger UI
-- **Docker support**: Multi-stage Dockerfile and Docker Compose
+- **Docker support**: Multi-stage Dockerfile with health checks
+- **Render-ready**: Blueprint configuration included
 
 ## Architecture
 
@@ -124,6 +125,8 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 
 ### External Task Worker Pattern
 
+All service tasks use External Task Workers (no Java Delegates) for maximum decoupling:
+
 ```txt
 ┌──────────────────┐     Poll for Tasks      ┌──────────────────┐
 │  Camunda Engine  │ ◄─────────────────────── │  External Worker │
@@ -141,11 +144,12 @@ The Regulatory Approval System implements a multi-stage approval workflow with t
 - Enables polyglot workers (any language)
 - Production-friendly horizontal scaling
 - Resilient failure handling with retries
+- Independent deployment and scaling
 
 ## Technology Stack
 
 | Component       | Technology            | Version  |
-|-----------------|-----------------------|----------|
+| --------------- | --------------------- | -------- |
 | Runtime         | Java                  | 21 (LTS) |
 | Framework       | Spring Boot           | 3.5.9    |
 | Workflow Engine | Camunda BPM           | 7.22.0   |
@@ -245,16 +249,32 @@ src/main/resources/
 - Maven 3.9+
 - Docker (optional)
 
-### Quick Start
+### Environment Variables (Required)
+
+Before running, set these environment variables:
+
+```bash
+# Generate a secure JWT secret (Base64 encoded, min 512-bit)
+export JWT_SECRET=$(openssl rand -base64 64)
+
+# Set Camunda admin password
+export CAMUNDA_ADMIN_PASSWORD=your-secure-password
+```
+
+### Quick Start (Local Development)
 
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd RegulatoryApprovalSystem
 
-# Build and run (uses H2 in-memory database - no setup required)
-./mvnw clean install
-./mvnw spring-boot:run
+# Set required environment variables
+export JWT_SECRET=$(openssl rand -base64 64)
+export CAMUNDA_ADMIN_PASSWORD=admin
+
+# Build and run
+mvn clean install
+mvn spring-boot:run
 
 # Access the application
 # Swagger UI: http://localhost:8080/swagger-ui.html
@@ -266,6 +286,11 @@ cd RegulatoryApprovalSystem
 ### Quick Start with Docker
 
 ```bash
+# Set environment variables
+export JWT_SECRET=$(openssl rand -base64 64)
+export CAMUNDA_ADMIN_PASSWORD=your-secure-password
+
+# Run with Docker Compose
 docker-compose up -d
 ```
 
@@ -274,6 +299,46 @@ docker-compose up -d
 ```bash
 curl http://localhost:8080/api/v1/health
 ```
+
+## Deployment
+
+### Deploy to Render
+
+1. **Fork/Push** this repository to your GitHub account
+
+2. **Create a new Web Service** on [Render Dashboard](https://dashboard.render.com)
+
+3. **Connect your repository** and select Docker as the runtime
+
+4. **Set environment variables** in Render dashboard:
+
+   - `JWT_SECRET`: Generate with `openssl rand -base64 64`
+   - `CAMUNDA_ADMIN_PASSWORD`: Your secure admin password
+
+5. **Configure settings**:
+
+   - Health Check Path: `/api/v1/health`
+   - Instance Type: Starter or higher (min 512MB RAM recommended)
+
+6. **Deploy** - Render will build and deploy automatically
+
+### Using Render Blueprint
+
+This project includes a `render.yaml` blueprint file. You can use it for one-click deployment:
+
+1. Click **New** → **Blueprint** in Render Dashboard
+2. Connect your repository
+3. Render will detect `render.yaml` and configure the service
+4. Set the required environment variables when prompted
+
+### Environment Variables for Production
+
+| Variable                   | Required | Description                            |
+| -------------------------- | -------- | -------------------------------------- |
+| `JWT_SECRET`               | Yes      | JWT signing key (Base64, min 512-bit)  |
+| `CAMUNDA_ADMIN_PASSWORD`   | Yes      | Camunda admin password                 |
+| `APP_CORS_ALLOWED_ORIGINS` | No       | CORS allowed origins (comma-separated) |
+| `PORT`                     | No       | Server port (default: 8080)            |
 
 ## API Reference
 
@@ -386,7 +451,7 @@ curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00
 ### Roles
 
 | Role           | Description         | Permissions                                 |
-|----------------|---------------------|---------------------------------------------|
+| -------------- | ------------------- | ------------------------------------------- |
 | REVIEWER       | Initial assessment  | Start workflow, Initial Review tasks        |
 | MANAGER        | Business approval   | Manager Approval tasks, view team workflows |
 | SENIOR_MANAGER | Escalation handling | Handle escalations, Final Approval          |
@@ -399,10 +464,7 @@ curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00
 ```json
 {
   "sub": "user123",
-  "roles": [
-    "REVIEWER",
-    "MANAGER"
-  ],
+  "roles": ["REVIEWER", "MANAGER"],
   "department": "RISK",
   "iss": "regulatory-approval-system",
   "iat": 1704067200,
@@ -414,14 +476,15 @@ curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00
 
 ### Environment Variables
 
-| Variable                 | Description                       | Default                              |
-|--------------------------|-----------------------------------|--------------------------------------|
-| `JWT_SECRET`             | JWT signing key (Base64, 512-bit) | (development key in application.yml) |
-| `CAMUNDA_ADMIN_PASSWORD` | Camunda admin password            | admin                                |
+| Variable                   | Description                       | Required |
+| -------------------------- | --------------------------------- | -------- |
+| `JWT_SECRET`               | JWT signing key (Base64, 512-bit) | Yes      |
+| `CAMUNDA_ADMIN_PASSWORD`   | Camunda admin password            | Yes      |
+| `APP_CORS_ALLOWED_ORIGINS` | CORS allowed origins              | No       |
 
 ### Database Configuration
 
-The application uses **H2 in-memory database** by default for easy development:
+The application uses **H2 in-memory database** by default:
 
 ```yaml
 spring:
@@ -438,7 +501,7 @@ Access the H2 console at: `http://localhost:8080/h2-console`
 SLA timers are configured in the BPMN file using ISO-8601 durations:
 
 | Stage            | Duration | BPMN Timer | Escalation Target |
-|------------------|----------|------------|-------------------|
+| ---------------- | -------- | ---------- | ----------------- |
 | Initial Review   | 8 hours  | `PT8H`     | Manager           |
 | Manager Approval | 24 hours | `PT24H`    | Senior Manager    |
 | Compliance Check | 48 hours | `PT48H`    | Compliance Lead   |
@@ -448,6 +511,7 @@ SLA timers are configured in the BPMN file using ISO-8601 durations:
 
 - [IMPLEMENTATION.md](IMPLEMENTATION.md) - Implementation guide, design decisions, and testing instructions
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and design patterns
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Detailed deployment guide and concepts
 - [Swagger UI](http://localhost:8080/swagger-ui.html) - Interactive API documentation
-- [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration (Login: admin/admin)
+- [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration
 - [H2 Console](http://localhost:8080/h2-console) - Database console (JDBC URL: jdbc:h2:mem:regulatory_db)

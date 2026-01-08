@@ -12,6 +12,10 @@ System.
 5. [Audit Trail Implementation](#5-audit-trail-implementation)
 6. [Error Handling & Fallbacks](#6-error-handling--fallbacks)
 7. [Key Design Decisions](#7-key-design-decisions)
+8. [Camunda Tasklist Forms](#8-camunda-tasklist-forms)
+9. [Database Configuration](#9-database-configuration)
+10. [Version Compatibility](#10-version-compatibility)
+11. [Testing Guide](#11-testing-guide)
 
 ---
 
@@ -793,14 +797,14 @@ curl -H "Authorization: Bearer $TOKEN_ADMIN" http://localhost:8080/api/v1/workfl
 
 ### User Roles
 
-| Role           | Permissions                                       |
-| -------------- | ------------------------------------------------- |
-| REVIEWER       | Start workflows, Initial Review tasks             |
-| MANAGER        | Manager Approval tasks                            |
-| SENIOR_MANAGER | Escalated reviews, Final Approval                 |
-| COMPLIANCE     | Compliance Manual Review tasks                    |
-| ADMIN          | Full access, Final Approval, Terminate workflows  |
-| AUDITOR        | View audit trails only                            |
+| Role           | Permissions                                      |
+| -------------- | ------------------------------------------------ |
+| REVIEWER       | Start workflows, Initial Review tasks            |
+| MANAGER        | Manager Approval tasks                           |
+| SENIOR_MANAGER | Escalated reviews, Final Approval                |
+| COMPLIANCE     | Compliance Manual Review tasks                   |
+| ADMIN          | Full access, Final Approval, Terminate workflows |
+| AUDITOR        | View audit trails only                           |
 
 ### Web UIs
 

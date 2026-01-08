@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Execution Listener for recording workflow end events.
+ * Uses static injection pattern required for Camunda listener integration.
  */
 @Component
 @Slf4j
