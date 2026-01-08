@@ -23,7 +23,7 @@ The Regulatory Approval System is an enterprise-grade workflow application that 
 
 ```txt
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Regulatory Approval System                    │
+│                    Regulatory Approval System                   │
 ├─────────────────────────────────────────────────────────────────┤
 │  Multi-Stage Approval    │  Role-Based Access    │  Audit Trail │
 │  SLA Enforcement         │  Risk Scoring         │  Escalation  │
