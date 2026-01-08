@@ -2,21 +2,22 @@
 # Stage 1: Build
 FROM eclipse-temurin:21-jdk-alpine AS builder
 
+# Install Maven
+RUN apk add --no-cache maven
+
 WORKDIR /app
 
-# Copy Maven wrapper and pom.xml first for better layer caching
+# Copy pom.xml first for better layer caching
 COPY pom.xml .
-COPY .mvn .mvn
-COPY mvnw .
 
 # Download dependencies (cached unless pom.xml changes)
-RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
+RUN mvn dependency:go-offline -B
 
 # Copy source code
 COPY src src
 
 # Build the application
-RUN ./mvnw package -DskipTests -B
+RUN mvn package -DskipTests -B
 
 # Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
