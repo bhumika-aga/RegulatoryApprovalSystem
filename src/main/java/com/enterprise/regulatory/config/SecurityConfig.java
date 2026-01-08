@@ -54,14 +54,11 @@ public class SecurityConfig {
                                                                 "/v3/api-docs/**")
                                                 .permitAll()
 
-                                                // Camunda webapp - requires authentication
-                                                .requestMatchers("/camunda/**").authenticated()
-                                                .requestMatchers("/camunda-welcome/**").authenticated()
-                                                // Engine REST API - allow for internal external task workers
-                                                // In production, consider IP-based filtering or service mesh
-                                                // authentication
-                                                .requestMatchers("/engine-rest/external-task/**").permitAll()
-                                                .requestMatchers("/engine-rest/**").authenticated()
+                                                // Camunda webapp - public access (Camunda has its own auth)
+                                                .requestMatchers("/camunda/**").permitAll()
+                                                .requestMatchers("/camunda-welcome/**").permitAll()
+                                                // Engine REST API - public for external task workers and API access
+                                                .requestMatchers("/engine-rest/**").permitAll()
 
                                                 // H2 Console (development only - should be disabled in production via
                                                 // config)
