@@ -40,16 +40,18 @@ USER appuser
 EXPOSE 8080
 
 # Health check for container orchestration
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD wget -q --spider http://localhost:8080/api/v1/health || exit 1
 
-# JVM options optimized for containers
-# - UseContainerSupport: Respect container memory limits
-# - MaxRAMPercentage: Use up to 75% of available memory for heap
-# - UseG1GC: Use G1 garbage collector for better latency
+# JVM options optimized for low memory (512MB free tier)
+# - Xmx384m: Hard limit heap to 384MB
+# - Xms256m: Start with 256MB heap
+# - UseSerialGC: Lower memory overhead than G1GC
+# - TieredStopAtLevel=1: Reduce JIT compilation memory
 ENTRYPOINT ["java", \
-    "-XX:+UseContainerSupport", \
-    "-XX:MaxRAMPercentage=75.0", \
-    "-XX:+UseG1GC", \
+    "-Xms256m", \
+    "-Xmx384m", \
+    "-XX:+UseSerialGC", \
+    "-XX:TieredStopAtLevel=1", \
     "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]
