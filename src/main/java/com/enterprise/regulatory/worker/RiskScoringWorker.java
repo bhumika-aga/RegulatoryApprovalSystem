@@ -10,12 +10,14 @@ import org.camunda.bpm.client.task.ExternalTask;
 import org.camunda.bpm.client.task.ExternalTaskHandler;
 import org.camunda.bpm.client.task.ExternalTaskService;
 import org.camunda.bpm.client.topic.TopicSubscription;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +39,8 @@ public class RiskScoringWorker implements ExternalTaskHandler {
     private final RegulatoryRequestRepository requestRepository;
     private TopicSubscription subscription;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(2)
     public void subscribe() {
         log.info("Subscribing to topic: {}", TOPIC_NAME);
         subscription = externalTaskClient.subscribe(TOPIC_NAME)

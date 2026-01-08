@@ -11,6 +11,9 @@ import org.camunda.bpm.client.task.ExternalTask;
 import org.camunda.bpm.client.task.ExternalTaskHandler;
 import org.camunda.bpm.client.task.ExternalTaskService;
 import org.camunda.bpm.client.topic.TopicSubscription;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,7 +21,6 @@ import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
 import com.enterprise.regulatory.service.AuditService;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +43,8 @@ public class EscalationWorker implements ExternalTaskHandler {
     private final AuditService auditService;
     private TopicSubscription subscription;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(3)
     public void subscribe() {
         log.info("Subscribing to topic: {}", TOPIC_NAME);
         subscription = externalTaskClient.subscribe(TOPIC_NAME)

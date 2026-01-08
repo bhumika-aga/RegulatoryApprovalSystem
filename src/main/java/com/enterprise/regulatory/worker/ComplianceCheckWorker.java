@@ -8,13 +8,15 @@ import org.camunda.bpm.client.task.ExternalTask;
 import org.camunda.bpm.client.task.ExternalTaskHandler;
 import org.camunda.bpm.client.task.ExternalTaskService;
 import org.camunda.bpm.client.topic.TopicSubscription;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.enterprise.regulatory.model.enums.ComplianceResult;
 import com.enterprise.regulatory.service.AuditService;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +38,8 @@ public class ComplianceCheckWorker implements ExternalTaskHandler {
     private final AuditService auditService;
     private TopicSubscription subscription;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(1)
     public void subscribe() {
         log.info("Subscribing to topic: {}", TOPIC_NAME);
         subscription = externalTaskClient.subscribe(TOPIC_NAME)
@@ -44,6 +47,7 @@ public class ComplianceCheckWorker implements ExternalTaskHandler {
                 .handler(this)
                 .open();
         externalTaskClient.start();
+        log.info("External Task Client started successfully");
     }
 
     @PreDestroy

@@ -9,9 +9,11 @@ import org.camunda.bpm.client.task.ExternalTaskHandler;
 import org.camunda.bpm.client.task.ExternalTaskService;
 import org.camunda.bpm.client.topic.TopicSubscription;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +40,8 @@ public class NotificationWorker implements ExternalTaskHandler {
     @Value("${app.notification.slack.enabled:false}")
     private boolean slackEnabled;
 
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(4)
     public void subscribe() {
         log.info("Subscribing to topic: {}", TOPIC_NAME);
         subscription = externalTaskClient.subscribe(TOPIC_NAME)
