@@ -661,17 +661,17 @@ spring:
 
 ## 10. Version Compatibility
 
-| Component    | Version | Notes                                                |
-| ------------ | ------- | ---------------------------------------------------- |
-| Spring Boot  | 3.5.9   | Latest stable                                        |
-| Camunda BPM  | 7.22.0  | Compatible with Spring Boot 3.5.x                    |
-| H2 Database  | 2.3.x   | Via Spring Boot dependency management                |
-| JAXB API     | 2.3.1   | Required for Camunda External Task Client on Java 21 |
-| JAXB Runtime | 2.3.9   | Runtime implementation for JAXB                      |
+| Component    | Version | Notes                                                 |
+| ------------ | ------- | ----------------------------------------------------- |
+| Spring Boot  | 3.5.9   | Latest stable                                         |
+| Camunda BPM  | 7.22.0  | Compatible with Spring Boot 3.5.x                     |
+| H2 Database  | 2.3.x   | Via Spring Boot dependency management                 |
+| JAXB API     | 2.3.1   | Required for Camunda External Task Client on Java 11+ |
+| JAXB Runtime | 2.3.9   | Runtime implementation for JAXB                       |
 
-### JAXB Dependencies (Java 21)
+### JAXB Dependencies (Java 11+)
 
-Camunda External Task Client requires JAXB which is not included in Java 21+:
+Camunda External Task Client requires JAXB which is not included in Java 11+:
 
 ```xml
 <dependency>

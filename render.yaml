@@ -19,7 +19,7 @@ services:
         sync: false
       # Optional: CORS allowed origins (comma-separated)
       - key: APP_CORS_ALLOWED_ORIGINS
-        value: https://your-domain.onrender.com
+        value: https://regulatory-approval-system.onrender.com
       # Server port (Render uses PORT env var)
       - key: PORT
         value: 8080

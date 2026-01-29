@@ -1,9 +1,10 @@
 # Regulatory Approval System
 
-[![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
+[![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://openjdk.java.net/projects/jdk/17/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.9-green.svg)](https://spring.io/projects/spring-boot)
 [![Camunda](https://img.shields.io/badge/Camunda-7.22.0-blue.svg)](https://camunda.com/)
 [![H2](https://img.shields.io/badge/H2-In--Memory-blue.svg)](https://www.h2database.com/)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-green.svg)](https://regulatory-approval-system.onrender.com/swagger-ui.html)
 
 An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system implements regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare domains using the **External Task Worker pattern** for maximum scalability and decoupling.
 
@@ -150,7 +151,7 @@ All service tasks use External Task Workers (no Java Delegates) for maximum deco
 
 | Component       | Technology            | Version  |
 | --------------- | --------------------- | -------- |
-| Runtime         | Java                  | 21 (LTS) |
+| Runtime         | Java                  | 17 (LTS) |
 | Framework       | Spring Boot           | 3.5.9    |
 | Workflow Engine | Camunda BPM           | 7.22.0   |
 | Database        | H2 (In-Memory)        | 2.3.x    |
@@ -245,7 +246,7 @@ src/main/resources/
 
 ### Prerequisites
 
-- Java 21+
+- Java 17+
 - Maven 3.9+
 - Docker (optional)
 
@@ -311,12 +312,10 @@ curl http://localhost:8080/api/v1/health
 3. **Connect your repository** and select Docker as the runtime
 
 4. **Set environment variables** in Render dashboard:
-
    - `JWT_SECRET`: Generate with `openssl rand -base64 64`
    - `CAMUNDA_ADMIN_PASSWORD`: Your secure admin password
 
 5. **Configure settings**:
-
    - Health Check Path: `/api/v1/health`
    - Instance Type: Starter or higher (min 512MB RAM recommended)
 

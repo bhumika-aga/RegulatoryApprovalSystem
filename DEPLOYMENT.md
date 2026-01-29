@@ -153,7 +153,7 @@ The application integrates Camunda BPM for workflow orchestration:
 
 ### Prerequisites
 
-- Java 21+
+- Java 17+
 - Maven 3.9+
 
 ### Setup
@@ -268,7 +268,6 @@ Render is a cloud platform that supports Docker deployments with automatic build
 1. **Create Account**: Sign up at [render.com](https://render.com)
 
 2. **Create New Web Service**:
-
    - Click **New** → **Web Service**
    - Connect your GitHub/GitLab repository
 
@@ -284,13 +283,11 @@ Render is a cloud platform that supports Docker deployments with automatic build
    | Instance Type   | Starter ($7/month) or higher |
 
 4. **Set Environment Variables**:
-
    - Click **Environment** → **Add Environment Variable**
    - Add `JWT_SECRET`: Generate with `openssl rand -base64 64`
    - Add `CAMUNDA_ADMIN_PASSWORD`: Your secure password
 
 5. **Configure Health Check**:
-
    - Health Check Path: `/api/v1/health`
 
 6. **Deploy**: Click **Create Web Service**
@@ -300,7 +297,6 @@ Render is a cloud platform that supports Docker deployments with automatic build
 1. **Push render.yaml** to your repository (already included)
 
 2. **Create Blueprint**:
-
    - Click **New** → **Blueprint**
    - Connect your repository
    - Render auto-detects `render.yaml`
@@ -328,10 +324,10 @@ services:
 
 ```bash
 # Check health
-curl https://your-app.onrender.com/api/v1/health
+curl https://regulatory-approval-system.onrender.com/api/v1/health
 
 # Generate token
-curl -X POST https://your-app.onrender.com/api/v1/auth/token \
+curl -X POST https://regulatory-approval-system.onrender.com/api/v1/auth/token \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "roles": ["ADMIN"], "department": "IT"}'
 ```

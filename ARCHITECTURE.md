@@ -440,7 +440,7 @@ Request → JwtAuthenticationFilter → SecurityContext → Controller
 
 | Component       | Technology            | Version  |
 | --------------- | --------------------- | -------- |
-| Runtime         | Java                  | 21 (LTS) |
+| Runtime         | Java                  | 17 (LTS) |
 | Framework       | Spring Boot           | 3.5.9    |
 | Workflow Engine | Camunda BPM           | 7.22.0   |
 | Database        | H2 (dev)              | 2.3.x    |
