@@ -159,14 +159,3 @@ docker-compose up -d
 ### Render Deployment
 
 This project is pre-configured for **Render** via `render.yaml`. Use the Blueprint feature in the Render dashboard to deploy automatically.
-
----
-
-## 🧪 Testing with Bruno
-
-A comprehensive [Bruno collection](bruno/RegulatoryApprovalSystem.json) is provided for end-to-end testing.
-
-1. Import the collection into [Bruno](https://www.usebruno.com/).
-2. Set the `baseUrl` environment variable to `http://localhost:8080`.
-3. Run the "Authentication" request to get a token.
-4. Follow the workflow chain: Start Workflow → Claim Task → Complete Task.
