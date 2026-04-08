@@ -36,10 +36,6 @@ spring:
         order_inserts: true
         order_updates: true
 
-  # Flyway Configuration (disabled for H2 - using JPA auto-ddl)
-  flyway:
-    enabled: false
-
 # Camunda BPM Configuration
 camunda:
   bpm:

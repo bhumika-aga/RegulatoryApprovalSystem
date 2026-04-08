@@ -4,44 +4,19 @@
   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
   xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  id="Definitions_RegulatoryApproval"
-  targetNamespace="http://bpmn.io/schema/bpmn"
-  exporter="Camunda Modeler"
-  exporterVersion="5.0.0">
-
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_RegulatoryApproval"
+  targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.44.0">
   <bpmn:process id="regulatory-approval-process" name="Regulatory Approval Process"
-    isExecutable="true"
-    camunda:historyTimeToLive="180">
-
-    <!-- Process Variables Documentation:
-         - requestId: UUID of the regulatory request
-         - requestTitle: Title of the request
-         - requestType: Type of regulatory request
-         - submitterId: User who submitted the request
-         - department: Department of the submitter
-         - priority: HIGH, NORMAL, LOW
-         - reviewerDecision: APPROVED, REJECTED, NEEDS_INFO
-         - managerDecision: APPROVED, REJECTED, ESCALATE
-         - complianceResult: PASS, FAIL, REQUIRES_ADDITIONAL_INFO
-         - finalDecision: APPROVED, REJECTED
-         - escalated: boolean flag
-         - riskScore: Numeric risk assessment score
-    -->
-
-    <!-- Start Event -->
+    isExecutable="true" camunda:historyTimeToLive="180">
     <bpmn:startEvent id="StartEvent_RequestSubmitted" name="Request Submitted"
       camunda:asyncBefore="true">
       <bpmn:extensionElements>
-        <camunda:executionListener class="com.enterprise.regulatory.listener.WorkflowStartListener"
+        <camunda:executionListener delegateExpression="${workflowStartListener}"
           event="end" />
       </bpmn:extensionElements>
       <bpmn:outgoing>Flow_StartToRiskAssessment</bpmn:outgoing>
     </bpmn:startEvent>
-
-    <!-- External Task: Risk Scoring -->
-    <bpmn:serviceTask id="Task_RiskAssessment" name="Risk Assessment"
-      camunda:type="external"
+    <bpmn:serviceTask id="Task_RiskAssessment" name="Risk Assessment" camunda:type="external"
       camunda:topic="risk-scoring">
       <bpmn:extensionElements>
         <camunda:inputOutput>
@@ -53,38 +28,28 @@
       <bpmn:incoming>Flow_StartToRiskAssessment</bpmn:incoming>
       <bpmn:outgoing>Flow_RiskToReviewer</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- User Task: Initial Reviewer Review (8 hours SLA) -->
-    <bpmn:userTask id="Task_InitialReview" name="Initial Review"
-      camunda:candidateGroups="REVIEWER"
-      camunda:formRef="initial-review"
-      camunda:formRefBinding="latest">
+    <bpmn:userTask id="Task_InitialReview" name="Initial Review" camunda:formRef="initial-review"
+      camunda:formRefBinding="latest" camunda:candidateGroups="REVIEWER">
       <bpmn:extensionElements>
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="create" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="assignment" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="complete" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_RiskToReviewer</bpmn:incoming>
       <bpmn:outgoing>Flow_ReviewerDecision</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- Timer Boundary Event: Initial Review SLA (8 hours) -->
-    <bpmn:boundaryEvent id="Timer_InitialReviewSLA" name="8 Hour SLA"
-      attachedToRef="Task_InitialReview"
-      cancelActivity="false">
+    <bpmn:boundaryEvent id="Timer_InitialReviewSLA" name="8 Hour SLA" cancelActivity="false"
+      attachedToRef="Task_InitialReview">
       <bpmn:outgoing>Flow_ReviewerEscalation</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerDef_InitialReview">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT8H</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
-
-    <!-- External Task: Escalate Initial Review -->
     <bpmn:serviceTask id="Task_EscalateInitialReview" name="Escalate to Manager"
-      camunda:type="external"
-      camunda:topic="escalation-handler">
+      camunda:type="external" camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">MANAGER</camunda:inputParameter>
@@ -94,11 +59,8 @@
       <bpmn:incoming>Flow_ReviewerEscalation</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationNotification1</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Send Escalation Notification -->
     <bpmn:serviceTask id="Task_SendEscalationNotification1" name="Send Escalation Notification"
-      camunda:type="external"
-      camunda:topic="notification-service">
+      camunda:type="external" camunda:topic="notification-service">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
@@ -108,61 +70,47 @@
       <bpmn:incoming>Flow_EscalationNotification1</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationEnd1</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- Gateway: Reviewer Decision -->
     <bpmn:exclusiveGateway id="Gateway_ReviewerDecision" name="Reviewer Decision">
       <bpmn:incoming>Flow_ReviewerDecision</bpmn:incoming>
       <bpmn:outgoing>Flow_ReviewerApproved</bpmn:outgoing>
       <bpmn:outgoing>Flow_ReviewerRejected</bpmn:outgoing>
       <bpmn:outgoing>Flow_ReviewerNeedsInfo</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-
-    <!-- User Task: Request Additional Information -->
     <bpmn:userTask id="Task_RequestInfo" name="Provide Additional Information"
-      camunda:assignee="${submitterId}"
-      camunda:formRef="additional-info"
-      camunda:formRefBinding="latest">
+      camunda:formRef="additional-info" camunda:formRefBinding="latest"
+      camunda:assignee="${submitterId}">
       <bpmn:extensionElements>
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="create" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="complete" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ReviewerNeedsInfo</bpmn:incoming>
       <bpmn:outgoing>Flow_InfoToReviewer</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- User Task: Manager Approval (24 hours SLA) -->
     <bpmn:userTask id="Task_ManagerApproval" name="Manager Approval"
-      camunda:candidateGroups="MANAGER"
-      camunda:formRef="manager-approval"
-      camunda:formRefBinding="latest">
+      camunda:formRef="manager-approval" camunda:formRefBinding="latest"
+      camunda:candidateGroups="MANAGER">
       <bpmn:extensionElements>
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="create" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="assignment" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="complete" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ReviewerApproved</bpmn:incoming>
       <bpmn:outgoing>Flow_ManagerDecision</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- Timer Boundary Event: Manager Approval SLA (24 hours) -->
-    <bpmn:boundaryEvent id="Timer_ManagerApprovalSLA" name="24 Hour SLA"
-      attachedToRef="Task_ManagerApproval"
-      cancelActivity="false">
+    <bpmn:boundaryEvent id="Timer_ManagerApprovalSLA" name="24 Hour SLA" cancelActivity="false"
+      attachedToRef="Task_ManagerApproval">
       <bpmn:outgoing>Flow_ManagerEscalation</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerDef_ManagerApproval">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT24H</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
-
-    <!-- External Task: Escalate Manager Approval -->
     <bpmn:serviceTask id="Task_EscalateManagerApproval" name="Escalate to Senior Manager"
-      camunda:type="external"
-      camunda:topic="escalation-handler">
+      camunda:type="external" camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">SENIOR_MANAGER</camunda:inputParameter>
@@ -172,11 +120,8 @@
       <bpmn:incoming>Flow_ManagerEscalation</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationNotification2</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Send Manager Escalation Notification -->
     <bpmn:serviceTask id="Task_SendEscalationNotification2" name="Send Escalation Notification"
-      camunda:type="external"
-      camunda:topic="notification-service">
+      camunda:type="external" camunda:topic="notification-service">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
@@ -186,42 +131,32 @@
       <bpmn:incoming>Flow_EscalationNotification2</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationEnd2</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- Gateway: Manager Decision -->
     <bpmn:exclusiveGateway id="Gateway_ManagerDecision" name="Manager Decision">
       <bpmn:incoming>Flow_ManagerDecision</bpmn:incoming>
       <bpmn:outgoing>Flow_ManagerApproved</bpmn:outgoing>
       <bpmn:outgoing>Flow_ManagerRejected</bpmn:outgoing>
       <bpmn:outgoing>Flow_ManagerEscalate</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-
-    <!-- User Task: Senior Manager Review (for escalated cases) -->
     <bpmn:userTask id="Task_SeniorManagerReview" name="Senior Manager Review"
-      camunda:candidateGroups="SENIOR_MANAGER"
-      camunda:formRef="senior-manager-review"
-      camunda:formRefBinding="latest">
+      camunda:formRef="senior-manager-review" camunda:formRefBinding="latest"
+      camunda:candidateGroups="SENIOR_MANAGER">
       <bpmn:extensionElements>
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="create" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="assignment" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="complete" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ManagerEscalate</bpmn:incoming>
       <bpmn:outgoing>Flow_SeniorManagerDecision</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- Gateway: Senior Manager Decision -->
     <bpmn:exclusiveGateway id="Gateway_SeniorManagerDecision" name="Senior Manager Decision">
       <bpmn:incoming>Flow_SeniorManagerDecision</bpmn:incoming>
       <bpmn:outgoing>Flow_SeniorApproved</bpmn:outgoing>
       <bpmn:outgoing>Flow_SeniorRejected</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-
-    <!-- External Task: Compliance Check (48 hours SLA) -->
-    <bpmn:serviceTask id="Task_ComplianceCheck" name="Compliance Check"
-      camunda:type="external"
+    <bpmn:serviceTask id="Task_ComplianceCheck" name="Compliance Check" camunda:type="external"
       camunda:topic="compliance-check">
       <bpmn:extensionElements>
         <camunda:inputOutput>
@@ -234,21 +169,15 @@
       <bpmn:incoming>Flow_SeniorApproved</bpmn:incoming>
       <bpmn:outgoing>Flow_ComplianceResult</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- Timer Boundary Event: Compliance Check SLA (48 hours) -->
-    <bpmn:boundaryEvent id="Timer_ComplianceCheckSLA" name="48 Hour SLA"
-      attachedToRef="Task_ComplianceCheck"
-      cancelActivity="false">
+    <bpmn:boundaryEvent id="Timer_ComplianceCheckSLA" name="48 Hour SLA" cancelActivity="false"
+      attachedToRef="Task_ComplianceCheck">
       <bpmn:outgoing>Flow_ComplianceEscalation</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerDef_ComplianceCheck">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT48H</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
-
-    <!-- External Task: Escalate Compliance Check -->
     <bpmn:serviceTask id="Task_EscalateComplianceCheck" name="Escalate to Compliance Lead"
-      camunda:type="external"
-      camunda:topic="escalation-handler">
+      camunda:type="external" camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">COMPLIANCE</camunda:inputParameter>
@@ -258,11 +187,8 @@
       <bpmn:incoming>Flow_ComplianceEscalation</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationNotification3</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Send Compliance Escalation Notification -->
     <bpmn:serviceTask id="Task_SendEscalationNotification3" name="Send Escalation Notification"
-      camunda:type="external"
-      camunda:topic="notification-service">
+      camunda:type="external" camunda:topic="notification-service">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
@@ -272,71 +198,54 @@
       <bpmn:incoming>Flow_EscalationNotification3</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationEnd3</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- Gateway: Compliance Result -->
     <bpmn:exclusiveGateway id="Gateway_ComplianceResult" name="Compliance Result">
       <bpmn:incoming>Flow_ComplianceResult</bpmn:incoming>
       <bpmn:outgoing>Flow_CompliancePassed</bpmn:outgoing>
       <bpmn:outgoing>Flow_ComplianceFailed</bpmn:outgoing>
       <bpmn:outgoing>Flow_ComplianceNeedsReview</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-
-    <!-- User Task: Compliance Manual Review -->
     <bpmn:userTask id="Task_ComplianceManualReview" name="Compliance Manual Review"
-      camunda:candidateGroups="COMPLIANCE"
-      camunda:formRef="compliance-review"
-      camunda:formRefBinding="latest">
+      camunda:formRef="compliance-review" camunda:formRefBinding="latest"
+      camunda:candidateGroups="COMPLIANCE">
       <bpmn:extensionElements>
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="create" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="assignment" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="complete" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ComplianceNeedsReview</bpmn:incoming>
       <bpmn:outgoing>Flow_ManualComplianceDecision</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- Gateway: Manual Compliance Decision -->
     <bpmn:exclusiveGateway id="Gateway_ManualComplianceDecision" name="Manual Compliance Decision">
       <bpmn:incoming>Flow_ManualComplianceDecision</bpmn:incoming>
       <bpmn:outgoing>Flow_ManualCompliancePassed</bpmn:outgoing>
       <bpmn:outgoing>Flow_ManualComplianceFailed</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-
-    <!-- User Task: Final Approval (8 hours SLA) -->
-    <bpmn:userTask id="Task_FinalApproval" name="Final Approval"
-      camunda:candidateGroups="ADMIN,SENIOR_MANAGER"
-      camunda:formRef="final-approval"
-      camunda:formRefBinding="latest">
+    <bpmn:userTask id="Task_FinalApproval" name="Final Approval" camunda:formRef="final-approval"
+      camunda:formRefBinding="latest" camunda:candidateGroups="ADMIN,SENIOR_MANAGER">
       <bpmn:extensionElements>
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="create" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="assignment" />
-        <camunda:taskListener class="com.enterprise.regulatory.listener.TaskAuditListener"
+        <camunda:taskListener delegateExpression="${taskAuditListener}"
           event="complete" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_CompliancePassed</bpmn:incoming>
       <bpmn:incoming>Flow_ManualCompliancePassed</bpmn:incoming>
       <bpmn:outgoing>Flow_FinalDecision</bpmn:outgoing>
     </bpmn:userTask>
-
-    <!-- Timer Boundary Event: Final Approval SLA (8 hours) -->
-    <bpmn:boundaryEvent id="Timer_FinalApprovalSLA" name="8 Hour SLA"
-      attachedToRef="Task_FinalApproval"
-      cancelActivity="false">
+    <bpmn:boundaryEvent id="Timer_FinalApprovalSLA" name="8 Hour SLA" cancelActivity="false"
+      attachedToRef="Task_FinalApproval">
       <bpmn:outgoing>Flow_FinalEscalation</bpmn:outgoing>
       <bpmn:timerEventDefinition id="TimerDef_FinalApproval">
         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT8H</bpmn:timeDuration>
       </bpmn:timerEventDefinition>
     </bpmn:boundaryEvent>
-
-    <!-- External Task: Escalate Final Approval -->
     <bpmn:serviceTask id="Task_EscalateFinalApproval" name="Escalate to Admin"
-      camunda:type="external"
-      camunda:topic="escalation-handler">
+      camunda:type="external" camunda:topic="escalation-handler">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="escalationTarget">ADMIN</camunda:inputParameter>
@@ -346,11 +255,8 @@
       <bpmn:incoming>Flow_FinalEscalation</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationNotification4</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Send Final Escalation Notification -->
     <bpmn:serviceTask id="Task_SendEscalationNotification4" name="Send Escalation Notification"
-      camunda:type="external"
-      camunda:topic="notification-service">
+      camunda:type="external" camunda:topic="notification-service">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="notificationType">ESCALATION</camunda:inputParameter>
@@ -360,17 +266,12 @@
       <bpmn:incoming>Flow_EscalationNotification4</bpmn:incoming>
       <bpmn:outgoing>Flow_EscalationEnd4</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- Gateway: Final Decision -->
     <bpmn:exclusiveGateway id="Gateway_FinalDecision" name="Final Decision">
       <bpmn:incoming>Flow_FinalDecision</bpmn:incoming>
       <bpmn:outgoing>Flow_FinalApproved</bpmn:outgoing>
       <bpmn:outgoing>Flow_FinalRejected</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-
-    <!-- External Task: Complete Approval -->
-    <bpmn:serviceTask id="Task_CompleteApproval" name="Complete Approval"
-      camunda:type="external"
+    <bpmn:serviceTask id="Task_CompleteApproval" name="Complete Approval" camunda:type="external"
       camunda:topic="workflow-completion">
       <bpmn:extensionElements>
         <camunda:inputOutput>
@@ -380,10 +281,7 @@
       <bpmn:incoming>Flow_FinalApproved</bpmn:incoming>
       <bpmn:outgoing>Flow_ToApprovedNotification</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Complete Rejection -->
-    <bpmn:serviceTask id="Task_CompleteRejection" name="Complete Rejection"
-      camunda:type="external"
+    <bpmn:serviceTask id="Task_CompleteRejection" name="Complete Rejection" camunda:type="external"
       camunda:topic="workflow-completion">
       <bpmn:extensionElements>
         <camunda:inputOutput>
@@ -398,11 +296,8 @@
       <bpmn:incoming>Flow_FinalRejected</bpmn:incoming>
       <bpmn:outgoing>Flow_ToRejectedNotification</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Send Approved Notification -->
     <bpmn:serviceTask id="Task_SendApprovedNotification" name="Send Approval Notification"
-      camunda:type="external"
-      camunda:topic="notification-service">
+      camunda:type="external" camunda:topic="notification-service">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="notificationType">APPROVED</camunda:inputParameter>
@@ -411,11 +306,8 @@
       <bpmn:incoming>Flow_ToApprovedNotification</bpmn:incoming>
       <bpmn:outgoing>Flow_ApprovedEnd</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- External Task: Send Rejected Notification -->
     <bpmn:serviceTask id="Task_SendRejectedNotification" name="Send Rejection Notification"
-      camunda:type="external"
-      camunda:topic="notification-service">
+      camunda:type="external" camunda:topic="notification-service">
       <bpmn:extensionElements>
         <camunda:inputOutput>
           <camunda:inputParameter name="notificationType">REJECTED</camunda:inputParameter>
@@ -424,41 +316,32 @@
       <bpmn:incoming>Flow_ToRejectedNotification</bpmn:incoming>
       <bpmn:outgoing>Flow_RejectedEnd</bpmn:outgoing>
     </bpmn:serviceTask>
-
-    <!-- End Events -->
     <bpmn:endEvent id="EndEvent_Approved" name="Request Approved">
       <bpmn:extensionElements>
-        <camunda:executionListener class="com.enterprise.regulatory.listener.WorkflowEndListener"
+        <camunda:executionListener delegateExpression="${workflowEndListener}"
           event="start" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ApprovedEnd</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:endEvent id="EndEvent_Rejected" name="Request Rejected">
       <bpmn:extensionElements>
-        <camunda:executionListener class="com.enterprise.regulatory.listener.WorkflowEndListener"
+        <camunda:executionListener delegateExpression="${workflowEndListener}"
           event="start" />
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_RejectedEnd</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:endEvent id="EndEvent_Escalation1" name="Escalation Complete">
       <bpmn:incoming>Flow_EscalationEnd1</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:endEvent id="EndEvent_Escalation2" name="Escalation Complete">
       <bpmn:incoming>Flow_EscalationEnd2</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:endEvent id="EndEvent_Escalation3" name="Escalation Complete">
       <bpmn:incoming>Flow_EscalationEnd3</bpmn:incoming>
     </bpmn:endEvent>
-
     <bpmn:endEvent id="EndEvent_Escalation4" name="Escalation Complete">
       <bpmn:incoming>Flow_EscalationEnd4</bpmn:incoming>
     </bpmn:endEvent>
-
-    <!-- Sequence Flows -->
     <bpmn:sequenceFlow id="Flow_StartToRiskAssessment" sourceRef="StartEvent_RequestSubmitted"
       targetRef="Task_RiskAssessment" />
     <bpmn:sequenceFlow id="Flow_RiskToReviewer" sourceRef="Task_RiskAssessment"
@@ -471,7 +354,6 @@
       targetRef="Task_SendEscalationNotification1" />
     <bpmn:sequenceFlow id="Flow_EscalationEnd1" sourceRef="Task_SendEscalationNotification1"
       targetRef="EndEvent_Escalation1" />
-
     <bpmn:sequenceFlow id="Flow_ReviewerApproved" sourceRef="Gateway_ReviewerDecision"
       targetRef="Task_ManagerApproval">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${reviewerDecision == 'APPROVED'}</bpmn:conditionExpression>
@@ -487,7 +369,6 @@
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_InfoToReviewer" sourceRef="Task_RequestInfo"
       targetRef="Task_InitialReview" />
-
     <bpmn:sequenceFlow id="Flow_ManagerDecision" sourceRef="Task_ManagerApproval"
       targetRef="Gateway_ManagerDecision" />
     <bpmn:sequenceFlow id="Flow_ManagerEscalation" sourceRef="Timer_ManagerApprovalSLA"
@@ -496,7 +377,6 @@
       targetRef="Task_SendEscalationNotification2" />
     <bpmn:sequenceFlow id="Flow_EscalationEnd2" sourceRef="Task_SendEscalationNotification2"
       targetRef="EndEvent_Escalation2" />
-
     <bpmn:sequenceFlow id="Flow_ManagerApproved" sourceRef="Gateway_ManagerDecision"
       targetRef="Task_ComplianceCheck">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${managerDecision == 'APPROVED'}</bpmn:conditionExpression>
@@ -509,7 +389,6 @@
       targetRef="Task_SeniorManagerReview">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${managerDecision == 'ESCALATE'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-
     <bpmn:sequenceFlow id="Flow_SeniorManagerDecision" sourceRef="Task_SeniorManagerReview"
       targetRef="Gateway_SeniorManagerDecision" />
     <bpmn:sequenceFlow id="Flow_SeniorApproved" sourceRef="Gateway_SeniorManagerDecision"
@@ -522,7 +401,6 @@
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${seniorManagerDecision ==
         'REJECTED'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-
     <bpmn:sequenceFlow id="Flow_ComplianceResult" sourceRef="Task_ComplianceCheck"
       targetRef="Gateway_ComplianceResult" />
     <bpmn:sequenceFlow id="Flow_ComplianceEscalation" sourceRef="Timer_ComplianceCheckSLA"
@@ -531,7 +409,6 @@
       targetRef="Task_SendEscalationNotification3" />
     <bpmn:sequenceFlow id="Flow_EscalationEnd3" sourceRef="Task_SendEscalationNotification3"
       targetRef="EndEvent_Escalation3" />
-
     <bpmn:sequenceFlow id="Flow_CompliancePassed" sourceRef="Gateway_ComplianceResult"
       targetRef="Task_FinalApproval">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${complianceResult == 'PASS'}</bpmn:conditionExpression>
@@ -545,7 +422,6 @@
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${complianceResult ==
         'REQUIRES_ADDITIONAL_INFO'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-
     <bpmn:sequenceFlow id="Flow_ManualComplianceDecision" sourceRef="Task_ComplianceManualReview"
       targetRef="Gateway_ManualComplianceDecision" />
     <bpmn:sequenceFlow id="Flow_ManualCompliancePassed" sourceRef="Gateway_ManualComplianceDecision"
@@ -558,7 +434,6 @@
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${manualComplianceDecision ==
         'FAIL'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-
     <bpmn:sequenceFlow id="Flow_FinalDecision" sourceRef="Task_FinalApproval"
       targetRef="Gateway_FinalDecision" />
     <bpmn:sequenceFlow id="Flow_FinalEscalation" sourceRef="Timer_FinalApprovalSLA"
@@ -567,7 +442,6 @@
       targetRef="Task_SendEscalationNotification4" />
     <bpmn:sequenceFlow id="Flow_EscalationEnd4" sourceRef="Task_SendEscalationNotification4"
       targetRef="EndEvent_Escalation4" />
-
     <bpmn:sequenceFlow id="Flow_FinalApproved" sourceRef="Gateway_FinalDecision"
       targetRef="Task_CompleteApproval">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${finalDecision == 'APPROVED'}</bpmn:conditionExpression>
@@ -576,7 +450,6 @@
       targetRef="Task_CompleteRejection">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${finalDecision == 'REJECTED'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-
     <bpmn:sequenceFlow id="Flow_ToApprovedNotification" sourceRef="Task_CompleteApproval"
       targetRef="Task_SendApprovedNotification" />
     <bpmn:sequenceFlow id="Flow_ApprovedEnd" sourceRef="Task_SendApprovedNotification"
@@ -585,13 +458,9 @@
       targetRef="Task_SendRejectedNotification" />
     <bpmn:sequenceFlow id="Flow_RejectedEnd" sourceRef="Task_SendRejectedNotification"
       targetRef="EndEvent_Rejected" />
-
   </bpmn:process>
-
-  <!-- BPMN Diagram Interchange - Visual Layout -->
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="regulatory-approval-process">
-      <!-- Start Event -->
       <bpmndi:BPMNShape id="StartEvent_RequestSubmitted_di"
         bpmnElement="StartEvent_RequestSubmitted">
         <dc:Bounds x="152" y="232" width="36" height="36" />
@@ -599,45 +468,19 @@
           <dc:Bounds x="130" y="275" width="80" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Risk Assessment -->
       <bpmndi:BPMNShape id="Task_RiskAssessment_di" bpmnElement="Task_RiskAssessment">
         <dc:Bounds x="240" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Initial Review -->
       <bpmndi:BPMNShape id="Task_InitialReview_di" bpmnElement="Task_InitialReview">
         <dc:Bounds x="390" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Timer: Initial Review SLA -->
-      <bpmndi:BPMNShape id="Timer_InitialReviewSLA_di" bpmnElement="Timer_InitialReviewSLA">
-        <dc:Bounds x="422" y="272" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="410" y="315" width="60" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Escalate Initial Review -->
       <bpmndi:BPMNShape id="Task_EscalateInitialReview_di" bpmnElement="Task_EscalateInitialReview">
         <dc:Bounds x="390" y="350" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Send Escalation Notification 1 -->
       <bpmndi:BPMNShape id="Task_SendEscalationNotification1_di"
         bpmnElement="Task_SendEscalationNotification1">
         <dc:Bounds x="390" y="470" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- End Event: Escalation 1 -->
-      <bpmndi:BPMNShape id="EndEvent_Escalation1_di" bpmnElement="EndEvent_Escalation1">
-        <dc:Bounds x="422" y="592" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="398" y="635" width="85" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Gateway: Reviewer Decision -->
       <bpmndi:BPMNShape id="Gateway_ReviewerDecision_di" bpmnElement="Gateway_ReviewerDecision"
         isMarkerVisible="true">
         <dc:Bounds x="545" y="225" width="50" height="50" />
@@ -645,46 +488,20 @@
           <dc:Bounds x="528" y="195" width="85" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Request Info Task -->
       <bpmndi:BPMNShape id="Task_RequestInfo_di" bpmnElement="Task_RequestInfo">
         <dc:Bounds x="520" y="80" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Manager Approval -->
       <bpmndi:BPMNShape id="Task_ManagerApproval_di" bpmnElement="Task_ManagerApproval">
         <dc:Bounds x="660" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Timer: Manager Approval SLA -->
-      <bpmndi:BPMNShape id="Timer_ManagerApprovalSLA_di" bpmnElement="Timer_ManagerApprovalSLA">
-        <dc:Bounds x="692" y="272" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="678" y="315" width="64" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Escalate Manager Approval -->
       <bpmndi:BPMNShape id="Task_EscalateManagerApproval_di"
         bpmnElement="Task_EscalateManagerApproval">
         <dc:Bounds x="660" y="350" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Send Escalation Notification 2 -->
       <bpmndi:BPMNShape id="Task_SendEscalationNotification2_di"
         bpmnElement="Task_SendEscalationNotification2">
         <dc:Bounds x="660" y="470" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- End Event: Escalation 2 -->
-      <bpmndi:BPMNShape id="EndEvent_Escalation2_di" bpmnElement="EndEvent_Escalation2">
-        <dc:Bounds x="692" y="592" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="668" y="635" width="85" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Gateway: Manager Decision -->
       <bpmndi:BPMNShape id="Gateway_ManagerDecision_di" bpmnElement="Gateway_ManagerDecision"
         isMarkerVisible="true">
         <dc:Bounds x="815" y="225" width="50" height="50" />
@@ -692,55 +509,27 @@
           <dc:Bounds x="798" y="195" width="85" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Senior Manager Review -->
       <bpmndi:BPMNShape id="Task_SeniorManagerReview_di" bpmnElement="Task_SeniorManagerReview">
         <dc:Bounds x="790" y="80" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Gateway: Senior Manager Decision -->
       <bpmndi:BPMNShape id="Gateway_SeniorManagerDecision_di"
         bpmnElement="Gateway_SeniorManagerDecision" isMarkerVisible="true">
         <dc:Bounds x="945" y="95" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="925" y="65" width="90" height="27" />
+          <dc:Bounds x="1004.5" y="106" width="79" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Compliance Check -->
       <bpmndi:BPMNShape id="Task_ComplianceCheck_di" bpmnElement="Task_ComplianceCheck">
         <dc:Bounds x="930" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Timer: Compliance Check SLA -->
-      <bpmndi:BPMNShape id="Timer_ComplianceCheckSLA_di" bpmnElement="Timer_ComplianceCheckSLA">
-        <dc:Bounds x="962" y="272" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="948" y="315" width="64" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Escalate Compliance Check -->
       <bpmndi:BPMNShape id="Task_EscalateComplianceCheck_di"
         bpmnElement="Task_EscalateComplianceCheck">
         <dc:Bounds x="930" y="350" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Send Escalation Notification 3 -->
       <bpmndi:BPMNShape id="Task_SendEscalationNotification3_di"
         bpmnElement="Task_SendEscalationNotification3">
         <dc:Bounds x="930" y="470" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- End Event: Escalation 3 -->
-      <bpmndi:BPMNShape id="EndEvent_Escalation3_di" bpmnElement="EndEvent_Escalation3">
-        <dc:Bounds x="962" y="592" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="938" y="635" width="85" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Gateway: Compliance Result -->
       <bpmndi:BPMNShape id="Gateway_ComplianceResult_di" bpmnElement="Gateway_ComplianceResult"
         isMarkerVisible="true">
         <dc:Bounds x="1085" y="225" width="50" height="50" />
@@ -748,55 +537,27 @@
           <dc:Bounds x="1068" y="195" width="85" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Compliance Manual Review -->
       <bpmndi:BPMNShape id="Task_ComplianceManualReview_di"
         bpmnElement="Task_ComplianceManualReview">
         <dc:Bounds x="1060" y="80" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Gateway: Manual Compliance Decision -->
       <bpmndi:BPMNShape id="Gateway_ManualComplianceDecision_di"
         bpmnElement="Gateway_ManualComplianceDecision" isMarkerVisible="true">
         <dc:Bounds x="1215" y="95" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1195" y="65" width="90" height="27" />
+          <dc:Bounds x="1145.5" y="100" width="59" height="40" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Final Approval -->
       <bpmndi:BPMNShape id="Task_FinalApproval_di" bpmnElement="Task_FinalApproval">
         <dc:Bounds x="1200" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Timer: Final Approval SLA -->
-      <bpmndi:BPMNShape id="Timer_FinalApprovalSLA_di" bpmnElement="Timer_FinalApprovalSLA">
-        <dc:Bounds x="1232" y="272" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="1220" y="315" width="60" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Escalate Final Approval -->
       <bpmndi:BPMNShape id="Task_EscalateFinalApproval_di" bpmnElement="Task_EscalateFinalApproval">
         <dc:Bounds x="1200" y="350" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Send Escalation Notification 4 -->
       <bpmndi:BPMNShape id="Task_SendEscalationNotification4_di"
         bpmnElement="Task_SendEscalationNotification4">
         <dc:Bounds x="1200" y="470" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- End Event: Escalation 4 -->
-      <bpmndi:BPMNShape id="EndEvent_Escalation4_di" bpmnElement="EndEvent_Escalation4">
-        <dc:Bounds x="1232" y="592" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="1208" y="635" width="85" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-
-      <!-- Gateway: Final Decision -->
       <bpmndi:BPMNShape id="Gateway_FinalDecision_di" bpmnElement="Gateway_FinalDecision"
         isMarkerVisible="true">
         <dc:Bounds x="1355" y="225" width="50" height="50" />
@@ -804,259 +565,258 @@
           <dc:Bounds x="1345" y="195" width="70" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Complete Approval -->
       <bpmndi:BPMNShape id="Task_CompleteApproval_di" bpmnElement="Task_CompleteApproval">
         <dc:Bounds x="1460" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Complete Rejection -->
       <bpmndi:BPMNShape id="Task_CompleteRejection_di" bpmnElement="Task_CompleteRejection">
         <dc:Bounds x="1460" y="350" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Send Approved Notification -->
       <bpmndi:BPMNShape id="Task_SendApprovedNotification_di"
         bpmnElement="Task_SendApprovedNotification">
         <dc:Bounds x="1610" y="210" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- Send Rejected Notification -->
       <bpmndi:BPMNShape id="Task_SendRejectedNotification_di"
         bpmnElement="Task_SendRejectedNotification">
         <dc:Bounds x="1610" y="350" width="100" height="80" />
       </bpmndi:BPMNShape>
-
-      <!-- End Event: Approved -->
       <bpmndi:BPMNShape id="EndEvent_Approved_di" bpmnElement="EndEvent_Approved">
         <dc:Bounds x="1762" y="232" width="36" height="36" />
         <bpmndi:BPMNLabel>
           <dc:Bounds x="1738" y="275" width="85" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- End Event: Rejected -->
+      <bpmndi:BPMNShape id="EndEvent_Escalation1_di" bpmnElement="EndEvent_Escalation1">
+        <dc:Bounds x="422" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="398" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Escalation2_di" bpmnElement="EndEvent_Escalation2">
+        <dc:Bounds x="692" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="668" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Escalation3_di" bpmnElement="EndEvent_Escalation3">
+        <dc:Bounds x="962" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="938" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Escalation4_di" bpmnElement="EndEvent_Escalation4">
+        <dc:Bounds x="1232" y="592" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1208" y="635" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_Rejected_di" bpmnElement="EndEvent_Rejected">
         <dc:Bounds x="1762" y="372" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="1738" y="415" width="85" height="14" />
+          <dc:Bounds x="1737" y="415" width="88" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-
-      <!-- Sequence Flow Edges -->
+      <bpmndi:BPMNShape id="Timer_FinalApprovalSLA_di" bpmnElement="Timer_FinalApprovalSLA">
+        <dc:Bounds x="1232" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1220" y="315" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_ComplianceCheckSLA_di" bpmnElement="Timer_ComplianceCheckSLA">
+        <dc:Bounds x="962" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="948" y="315" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_ManagerApprovalSLA_di" bpmnElement="Timer_ManagerApprovalSLA">
+        <dc:Bounds x="692" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="678" y="315" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Timer_InitialReviewSLA_di" bpmnElement="Timer_InitialReviewSLA">
+        <dc:Bounds x="422" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="410" y="315" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_StartToRiskAssessment_di" bpmnElement="Flow_StartToRiskAssessment">
         <di:waypoint x="188" y="250" />
         <di:waypoint x="240" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_RiskToReviewer_di" bpmnElement="Flow_RiskToReviewer">
         <di:waypoint x="340" y="250" />
         <di:waypoint x="390" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ReviewerDecision_di" bpmnElement="Flow_ReviewerDecision">
         <di:waypoint x="490" y="250" />
         <di:waypoint x="545" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ReviewerEscalation_di" bpmnElement="Flow_ReviewerEscalation">
         <di:waypoint x="440" y="308" />
         <di:waypoint x="440" y="350" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationNotification1_di"
         bpmnElement="Flow_EscalationNotification1">
         <di:waypoint x="440" y="430" />
         <di:waypoint x="440" y="470" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationEnd1_di" bpmnElement="Flow_EscalationEnd1">
         <di:waypoint x="440" y="550" />
         <di:waypoint x="440" y="592" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ReviewerApproved_di" bpmnElement="Flow_ReviewerApproved">
         <di:waypoint x="595" y="250" />
         <di:waypoint x="660" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ReviewerRejected_di" bpmnElement="Flow_ReviewerRejected">
         <di:waypoint x="570" y="275" />
-        <di:waypoint x="570" y="390" />
-        <di:waypoint x="1460" y="390" />
+        <di:waypoint x="570" y="670" />
+        <di:waypoint x="1510" y="670" />
+        <di:waypoint x="1510" y="430" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ReviewerNeedsInfo_di" bpmnElement="Flow_ReviewerNeedsInfo">
         <di:waypoint x="570" y="225" />
         <di:waypoint x="570" y="160" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_InfoToReviewer_di" bpmnElement="Flow_InfoToReviewer">
         <di:waypoint x="520" y="120" />
         <di:waypoint x="440" y="120" />
         <di:waypoint x="440" y="210" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManagerDecision_di" bpmnElement="Flow_ManagerDecision">
         <di:waypoint x="760" y="250" />
         <di:waypoint x="815" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManagerEscalation_di" bpmnElement="Flow_ManagerEscalation">
         <di:waypoint x="710" y="308" />
         <di:waypoint x="710" y="350" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationNotification2_di"
         bpmnElement="Flow_EscalationNotification2">
         <di:waypoint x="710" y="430" />
         <di:waypoint x="710" y="470" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationEnd2_di" bpmnElement="Flow_EscalationEnd2">
         <di:waypoint x="710" y="550" />
         <di:waypoint x="710" y="592" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManagerApproved_di" bpmnElement="Flow_ManagerApproved">
         <di:waypoint x="865" y="250" />
         <di:waypoint x="930" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManagerRejected_di" bpmnElement="Flow_ManagerRejected">
         <di:waypoint x="840" y="275" />
-        <di:waypoint x="840" y="390" />
-        <di:waypoint x="1460" y="390" />
+        <di:waypoint x="840" y="670" />
+        <di:waypoint x="1510" y="670" />
+        <di:waypoint x="1510" y="430" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManagerEscalate_di" bpmnElement="Flow_ManagerEscalate">
         <di:waypoint x="840" y="225" />
         <di:waypoint x="840" y="160" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_SeniorManagerDecision_di" bpmnElement="Flow_SeniorManagerDecision">
         <di:waypoint x="890" y="120" />
         <di:waypoint x="945" y="120" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_SeniorApproved_di" bpmnElement="Flow_SeniorApproved">
         <di:waypoint x="970" y="145" />
         <di:waypoint x="970" y="210" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_SeniorRejected_di" bpmnElement="Flow_SeniorRejected">
-        <di:waypoint x="995" y="120" />
-        <di:waypoint x="1510" y="120" />
+        <di:waypoint x="970" y="95" />
+        <di:waypoint x="970" y="50" />
+        <di:waypoint x="1510" y="50" />
         <di:waypoint x="1510" y="350" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ComplianceResult_di" bpmnElement="Flow_ComplianceResult">
         <di:waypoint x="1030" y="250" />
         <di:waypoint x="1085" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ComplianceEscalation_di" bpmnElement="Flow_ComplianceEscalation">
         <di:waypoint x="980" y="308" />
         <di:waypoint x="980" y="350" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationNotification3_di"
         bpmnElement="Flow_EscalationNotification3">
         <di:waypoint x="980" y="430" />
         <di:waypoint x="980" y="470" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationEnd3_di" bpmnElement="Flow_EscalationEnd3">
         <di:waypoint x="980" y="550" />
         <di:waypoint x="980" y="592" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_CompliancePassed_di" bpmnElement="Flow_CompliancePassed">
         <di:waypoint x="1135" y="250" />
         <di:waypoint x="1200" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ComplianceFailed_di" bpmnElement="Flow_ComplianceFailed">
         <di:waypoint x="1110" y="275" />
-        <di:waypoint x="1110" y="390" />
-        <di:waypoint x="1460" y="390" />
+        <di:waypoint x="1110" y="670" />
+        <di:waypoint x="1510" y="670" />
+        <di:waypoint x="1510" y="430" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ComplianceNeedsReview_di" bpmnElement="Flow_ComplianceNeedsReview">
         <di:waypoint x="1110" y="225" />
         <di:waypoint x="1110" y="160" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManualComplianceDecision_di"
         bpmnElement="Flow_ManualComplianceDecision">
-        <di:waypoint x="1160" y="120" />
-        <di:waypoint x="1215" y="120" />
+        <di:waypoint x="1110" y="80" />
+        <di:waypoint x="1110" y="50" />
+        <di:waypoint x="1240" y="50" />
+        <di:waypoint x="1240" y="95" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManualCompliancePassed_di" bpmnElement="Flow_ManualCompliancePassed">
         <di:waypoint x="1240" y="145" />
         <di:waypoint x="1240" y="210" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ManualComplianceFailed_di" bpmnElement="Flow_ManualComplianceFailed">
         <di:waypoint x="1265" y="120" />
         <di:waypoint x="1510" y="120" />
         <di:waypoint x="1510" y="350" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_FinalDecision_di" bpmnElement="Flow_FinalDecision">
         <di:waypoint x="1300" y="250" />
         <di:waypoint x="1355" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_FinalEscalation_di" bpmnElement="Flow_FinalEscalation">
         <di:waypoint x="1250" y="308" />
         <di:waypoint x="1250" y="350" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationNotification4_di"
         bpmnElement="Flow_EscalationNotification4">
         <di:waypoint x="1250" y="430" />
         <di:waypoint x="1250" y="470" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_EscalationEnd4_di" bpmnElement="Flow_EscalationEnd4">
         <di:waypoint x="1250" y="550" />
         <di:waypoint x="1250" y="592" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_FinalApproved_di" bpmnElement="Flow_FinalApproved">
         <di:waypoint x="1405" y="250" />
         <di:waypoint x="1460" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_FinalRejected_di" bpmnElement="Flow_FinalRejected">
         <di:waypoint x="1380" y="275" />
         <di:waypoint x="1380" y="390" />
         <di:waypoint x="1460" y="390" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ToApprovedNotification_di" bpmnElement="Flow_ToApprovedNotification">
         <di:waypoint x="1560" y="250" />
         <di:waypoint x="1610" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ApprovedEnd_di" bpmnElement="Flow_ApprovedEnd">
         <di:waypoint x="1710" y="250" />
         <di:waypoint x="1762" y="250" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_ToRejectedNotification_di" bpmnElement="Flow_ToRejectedNotification">
         <di:waypoint x="1560" y="390" />
         <di:waypoint x="1610" y="390" />
       </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNEdge id="Flow_RejectedEnd_di" bpmnElement="Flow_RejectedEnd">
         <di:waypoint x="1710" y="390" />
-        <di:waypoint x="1780" y="390" />
+        <di:waypoint x="1762" y="390" />
       </bpmndi:BPMNEdge>
-
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
-
 </bpmn:definitions>

@@ -1,516 +1,172 @@
 # Regulatory Approval System
 
 [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://openjdk.java.net/projects/jdk/17/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.9-green.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.13-green.svg)](https://spring.io/projects/spring-boot)
 [![Camunda](https://img.shields.io/badge/Camunda-7.22.0-blue.svg)](https://camunda.com/)
 [![H2](https://img.shields.io/badge/H2-In--Memory-blue.svg)](https://www.h2database.com/)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-green.svg)](https://regulatory-approval-system.onrender.com/swagger-ui.html)
 
-An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system implements regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare domains using the **External Task Worker pattern** for maximum scalability and decoupling.
+An enterprise-grade BPMN-based regulatory approval workflow system built with Spring Boot 3 and Camunda 7. This system implements complex regulatory approval workflows typical in BFSI (Banking, Financial Services, and Insurance) and healthcare domains.
 
-## Table of Contents
+## 🚀 Overview
 
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Technology Stack](#technology-stack)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Deployment](#deployment)
-- [API Reference](#api-reference)
-- [Workflow Stages](#workflow-stages)
-- [Security](#security)
-- [Configuration](#configuration)
-- [Documentation](#documentation)
+The Regulatory Approval System orchestrates a multi-stage approval process using the **External Task Worker pattern** for maximum scalability and decoupling. Unlike traditional Java Delegate implementations, this system ensures that business logic is completely decoupled from the workflow engine, allowing for independent scaling and resilient failure handling.
 
-## Overview
-
-The Regulatory Approval System implements a multi-stage approval workflow with the following chain:
+### Core Workflow Flow
 
 ```txt
-┌─────────┐    ┌──────────┐    ┌─────────┐    ┌────────────┐    ┌───────┐
-│ Submit  │───►│ Reviewer │───►│ Manager │───►│ Compliance │───►│ Final │
-│ Request │    │  (8h)    │    │  (24h)  │    │   (48h)    │    │ (8h)  │
-└─────────┘    └────┬─────┘    └────┬────┘    └─────┬──────┘    └───┬───┘
-                    │               │               │               │
-                    ▼               ▼               ▼               ▼
-               Escalate to    Escalate to     Escalate to     Escalate to
-                 Manager      Senior Mgr     Compliance Lead     Admin
+Submit → Initial Review → Manager Approval → Compliance Check → Final Approval → Complete
+           (8h SLA)         (24h SLA)          (48h SLA)          (8h SLA)
+               ↓                 ↓                  ↓                  ↓
+           Escalate to      Escalate to        Manual Review      Escalate to
+            Manager        Senior Manager      (if required)        Admin
 ```
 
-## Features
+---
 
-### Core Workflow Features
+## 🧠 Logical Implementation & Concepts
 
-- **Multi-stage approval workflow**: Reviewer → Manager → Compliance → Final Approval
-- **SLA enforcement**: Timer boundary events with configurable durations (8h/24h/48h)
-- **Automatic escalation**: Tasks escalate to senior roles on SLA breach
-- **Risk scoring**: Automated risk assessment using external task workers
-- **Compliance checking**: Decoupled compliance validation via external workers
+### 1. BPMN Workflow Orchestration
 
-### Security Features
+The heart of the system is the `regulatory-approval-process.bpmn`. It defines the sequence of operations, user tasks, service tasks, and gateways.
 
-- **JWT authentication**: Stateless token-based authentication
-- **Role-based authorization**: 6 distinct roles with granular permissions
-- **Method-level security**: Spring Security `@PreAuthorize` annotations
-- **Camunda identity integration**: JWT roles synced to Camunda groups at runtime
-- **No hardcoded secrets**: All sensitive configuration via environment variables
+- **User Tasks**: Managed by Camunda's Task Service. Integrated with JWT roles for candidate group assignments.
+- **Service Tasks**: Implemented as **External Tasks**. The engine publishes work to "topics," and independent workers poll and execute them.
+- **Timers & SLAs**: Non-canceling boundary timer events enforce response times. If a task exceeds its SLA, a parallel escalation flow is triggered without cancelling the original task.
 
-### Audit Features
+### 2. External Task Worker Pattern
 
-- **Complete audit trail**: All workflow events recorded to database
-- **Decision tracking**: Approval/rejection decisions with comments
-- **SLA breach logging**: Escalation events tracked with timestamps
-- **User action history**: Full traceability of who did what and when
+We use 5 specialized external task workers:
 
-### Technical Features
+- **`risk-scoring`**: Calculates risk level based on request attributes.
+- **`compliance-check`**: Automated validation against regulatory rules.
+- **`escalation-handler`**: Processes SLA breaches and updates audit trails.
+- **`workflow-completion`**: Finalizes the request status (APPROVED/REJECTED).
+- **`notification-service`**: Handles asynchronous user communications.
 
-- **External Task Workers**: Decoupled service execution for scalability (no Java Delegates)
-- **Production-ready**: Proper error handling, health checks, container-optimized
-- **API documentation**: OpenAPI 3.0 with Swagger UI
-- **Docker support**: Multi-stage Dockerfile with health checks
-- **Render-ready**: Blueprint configuration included
+### 3. Resilience & Fallbacks
 
-## Architecture
+Each worker implements a robust error handling strategy:
 
-### High-Level Architecture
+- **Retries**: Automatic retries with exponential backoff (5s, 10s, 15s).
+- **Fallbacks**:
+  - _Risk Worker_: Falls back to a default score (50) to prevent blocking.
+  - _Compliance Worker_: Raises a BPMN Error if critical validation fails, creating an incident for manual intervention.
+  - _Notification Worker_: Silently logs failures to ensure notifications are non-blocking.
 
-```txt
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Client Applications                                │
-│                    (Web UI, Mobile Apps, API Consumers)                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            REST API Layer                                    │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
-│  │   Auth      │ │  Workflow   │ │    Task     │ │   Audit     │           │
-│  │ Controller  │ │ Controller  │ │ Controller  │ │ Controller  │           │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘           │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Service Layer                                      │
-│  ┌─────────────┐ ┌─────────────────────┐ ┌─────────────┐                   │
-│  │  Workflow   │ │  WorkflowTask       │ │   Audit     │                   │
-│  │  Service    │ │  Service            │ │  Service    │                   │
-│  └─────────────┘ └─────────────────────┘ └─────────────┘                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                    ┌─────────────────┴─────────────────┐
-                    ▼                                   ▼
-┌──────────────────────────────┐    ┌──────────────────────────────────────────┐
-│      Camunda BPM Engine      │    │          External Task Workers           │
-│  ┌────────────────────────┐  │    │  ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │   Process Runtime      │  │    │  │Compliance│ │   Risk   │ │Notifica- │ │
-│  │   Task Service         │  │    │  │  Worker  │ │  Worker  │ │  tion    │ │
-│  │   History Service      │  │    │  └──────────┘ └──────────┘ └──────────┘ │
-│  └────────────────────────┘  │    └──────────────────────────────────────────┘
-│  ┌────────────────────────┐  │
-│  │   Task Listeners       │  │
-│  │   Execution Listeners  │  │
-│  └────────────────────────┘  │
-└──────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         H2 In-Memory Database                                │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐               │
-│  │ Camunda Tables  │ │ Regulatory      │ │ Workflow Audit  │               │
-│  │ (ACT_*)         │ │ Request Table   │ │ Table           │               │
-│  └─────────────────┘ └─────────────────┘ └─────────────────┘               │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### 4. Audit Trail
 
-### External Task Worker Pattern
+Comprehensive auditing is captured via `TaskAuditListener` and workers:
 
-All service tasks use External Task Workers (no Java Delegates) for maximum decoupling:
+- **Task Events**: Created, Claimed, Completed.
+- **Workflow Events**: Started, Ended, Escalated.
+- **Data Changes**: Field-level changes and decisions are recorded with timestamps and actor details.
 
-```txt
-┌──────────────────┐     Poll for Tasks      ┌──────────────────┐
-│  Camunda Engine  │ ◄─────────────────────── │  External Worker │
-│                  │                          │                  │
-│  External Task   │ ──────────────────────► │  Execute Logic   │
-│  Topic: X        │     Fetch & Lock        │                  │
-│                  │                          │  Complete Task   │
-│                  │ ◄─────────────────────── │  with Variables  │
-└──────────────────┘                          └──────────────────┘
-```
+---
 
-**Benefits:**
+## 🏗️ Architecture
 
-- Decouples workflow from business logic
-- Enables polyglot workers (any language)
-- Production-friendly horizontal scaling
-- Resilient failure handling with retries
-- Independent deployment and scaling
+### High-Level Components
 
-## Technology Stack
+- **REST API Layer**: Spring Boot Controllers handling Auth, Workflow, and Tasks.
+- **Service Layer**: Business orchestration and JPA repository interactions.
+- **Engine Layer**: Camunda 7 Embedded Process Engine.
+- **Worker Layer**: Independent External Task Clients polling the engine.
+- **Persistence Layer**: H2 In-Memory (Dev) with Flyway migrations.
 
-| Component       | Technology            | Version  |
-| --------------- | --------------------- | -------- |
-| Runtime         | Java                  | 17 (LTS) |
-| Framework       | Spring Boot           | 3.5.9    |
-| Workflow Engine | Camunda BPM           | 7.22.0   |
-| Database        | H2 (In-Memory)        | 2.3.x    |
-| Security        | Spring Security + JWT | 6.x      |
-| API Docs        | SpringDoc OpenAPI     | 2.8.0    |
-| Build           | Maven                 | 3.9+     |
+---
 
-## Project Structure
+## 🔐 Security & Roles
+
+Authentication is handled via **JWT (JSON Web Tokens)**. Roles are synchronized between Spring Security and Camunda Identity Service at runtime.
+
+| Role               | Permissions                               |
+| :----------------- | :---------------------------------------- |
+| **REVIEWER**       | Start workflows, Initial Assessment tasks |
+| **MANAGER**        | Business approvals, Team visibility       |
+| **SENIOR_MANAGER** | Escalation handling, Final Approvals      |
+| **COMPLIANCE**     | Regulatory manual reviews                 |
+| **AUDITOR**        | Read-only audit trail access              |
+| **ADMIN**          | Full system access, Termination rights    |
+
+---
+
+## 🛠️ Technology Stack
+
+- **Framework**: Spring Boot 3.5.13
+- **Workflow**: Camunda BPM 7.22.0
+- **Security**: Spring Security + JJWT
+- **API Docs**: SpringDoc OpenAPI (Swagger)
+- **Database**: H2 (In-Memory) / Flyway
+- **Tooling**: Lombok, MapStruct
+
+---
+
+## 📂 Project Structure
 
 ```txt
 src/main/java/com/enterprise/regulatory/
-├── config/                    # Configuration classes
-│   ├── SecurityConfig.java    # Spring Security configuration
-│   ├── CamundaConfig.java     # Camunda engine configuration
-│   ├── CamundaSecurityConfig.java # Camunda webapp authentication
-│   ├── OpenApiConfig.java     # Swagger/OpenAPI configuration
-│   └── AsyncConfig.java       # Async execution configuration
-├── controller/                # REST API controllers
-│   ├── AuthController.java    # Authentication endpoints
-│   ├── WorkflowController.java # Workflow operations
-│   ├── TaskController.java    # Task management
-│   ├── AuditController.java   # Audit trail access
-│   └── HealthController.java  # Health check
-├── service/                   # Business logic services
-│   ├── WorkflowService.java   # Workflow operations
-│   ├── WorkflowTaskService.java # Task operations
-│   └── AuditService.java      # Audit operations
-├── listener/                  # Camunda Listeners
-│   ├── TaskAuditListener.java
-│   ├── WorkflowStartListener.java
-│   └── WorkflowEndListener.java
-├── worker/                    # External Task Workers
-│   ├── ExternalTaskWorkerConfig.java
-│   ├── ComplianceCheckWorker.java
-│   ├── RiskScoringWorker.java
-│   ├── EscalationWorker.java
-│   ├── WorkflowCompletionWorker.java
-│   └── NotificationWorker.java
-├── security/                  # Security components
-│   ├── JwtTokenProvider.java
-│   ├── JwtAuthenticationFilter.java
-│   ├── JwtAuthenticationEntryPoint.java
-│   ├── JwtProperties.java
-│   ├── UserPrincipal.java
-│   ├── SecurityUtils.java
-│   ├── CamundaIdentityService.java
-│   └── CamundaAuthenticationProvider.java
-├── model/                     # Domain models
-│   ├── entity/
-│   │   ├── RegulatoryRequest.java
-│   │   └── WorkflowAudit.java
-│   └── enums/
-│       ├── ApprovalStatus.java
-│       ├── AuditEventType.java
-│       ├── ComplianceResult.java
-│       └── UserRole.java
-├── dto/                       # Data Transfer Objects
-│   ├── request/
-│   │   ├── StartWorkflowRequest.java
-│   │   ├── CompleteTaskRequest.java
-│   │   └── AuthRequest.java
-│   └── response/
-│       ├── WorkflowResponse.java
-│       ├── TaskResponse.java
-│       ├── AuditResponse.java
-│       ├── AuthResponse.java
-│       └── ApiResponse.java
-├── repository/                # Data access
-│   ├── RegulatoryRequestRepository.java
-│   └── WorkflowAuditRepository.java
-├── exception/                 # Exception handling
-│   ├── GlobalExceptionHandler.java
-│   ├── ResourceNotFoundException.java
-│   ├── WorkflowException.java
-│   └── TaskOperationException.java
-└── RegulatoryApprovalApplication.java
-
-src/main/resources/
-├── bpmn/
-│   └── regulatory-approval-process.bpmn
-├── static/forms/              # Camunda Tasklist forms
-│   ├── initial-review.form
-│   ├── manager-approval.form
-│   ├── compliance-review.form
-│   ├── final-approval.form
-│   ├── senior-manager-review.form
-│   └── additional-info.form
-└── application.yml
+├── config/          # Spring & Camunda configuration
+├── controller/      # REST API endpoints
+├── service/         # Business logic orchestration
+├── worker/          # External task workers
+├── listener/        # Camunda event listeners
+├── security/        # JWT & Identity mapping
+├── model/           # Entities & enums
+├── dto/             # Request/Response data objects
+├── repository/      # Data access (JPA)
+└── exception/       # Global error handling
 ```
 
-## Getting Started
+---
+
+## 🚦 Getting Started
 
 ### Prerequisites
 
 - Java 17+
 - Maven 3.9+
-- Docker (optional)
-
-### Environment Variables (Required)
-
-Before running, set these environment variables:
-
-```bash
-# Generate a secure JWT secret (Base64 encoded, min 512-bit)
-export JWT_SECRET=$(openssl rand -base64 64)
-
-# Set Camunda admin password
-export CAMUNDA_ADMIN_PASSWORD=your-secure-password
-```
-
-### Quick Start (Local Development)
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd RegulatoryApprovalSystem
-
-# Set required environment variables
-export JWT_SECRET=$(openssl rand -base64 64)
-export CAMUNDA_ADMIN_PASSWORD=admin
-
-# Build and run
-mvn clean install
-mvn spring-boot:run
-
-# Access the application
-# Swagger UI: http://localhost:8080/swagger-ui.html
-# Camunda Webapp: http://localhost:8080/camunda
-# H2 Console: http://localhost:8080/h2-console
-# Health Check: http://localhost:8080/api/v1/health
-```
-
-### Quick Start with Docker
-
-```bash
-# Set environment variables
-export JWT_SECRET=$(openssl rand -base64 64)
-export CAMUNDA_ADMIN_PASSWORD=your-secure-password
-
-# Run with Docker Compose
-docker-compose up -d
-```
-
-### Verify Installation
-
-```bash
-curl http://localhost:8080/api/v1/health
-```
-
-## Deployment
-
-### Deploy to Render
-
-1. **Fork/Push** this repository to your GitHub account
-
-2. **Create a new Web Service** on [Render Dashboard](https://dashboard.render.com)
-
-3. **Connect your repository** and select Docker as the runtime
-
-4. **Set environment variables** in Render dashboard:
-   - `JWT_SECRET`: Generate with `openssl rand -base64 64`
-   - `CAMUNDA_ADMIN_PASSWORD`: Your secure admin password
-
-5. **Configure settings**:
-   - Health Check Path: `/api/v1/health`
-   - Instance Type: Starter or higher (min 512MB RAM recommended)
-
-6. **Deploy** - Render will build and deploy automatically
-
-### Using Render Blueprint
-
-This project includes a `render.yaml` blueprint file. You can use it for one-click deployment:
-
-1. Click **New** → **Blueprint** in Render Dashboard
-2. Connect your repository
-3. Render will detect `render.yaml` and configure the service
-4. Set the required environment variables when prompted
-
-### Environment Variables for Production
-
-| Variable                   | Required | Description                            |
-| -------------------------- | -------- | -------------------------------------- |
-| `JWT_SECRET`               | Yes      | JWT signing key (Base64, min 512-bit)  |
-| `CAMUNDA_ADMIN_PASSWORD`   | Yes      | Camunda admin password                 |
-| `APP_CORS_ALLOWED_ORIGINS` | No       | CORS allowed origins (comma-separated) |
-| `PORT`                     | No       | Server port (default: 8080)            |
-
-## API Reference
-
-### Authentication
-
-```bash
-# Generate JWT token
-curl -X POST http://localhost:8080/api/v1/auth/token \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "reviewer1",
-    "roles": ["REVIEWER"],
-    "department": "RISK"
-  }'
-```
-
-### Workflow Operations
-
-```bash
-# Start a new workflow
-curl -X POST http://localhost:8080/api/v1/workflow/start \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "requestTitle": "New Product Approval",
-    "requestDescription": "Request for new investment product",
-    "requestType": "FINANCIAL_PRODUCT",
-    "department": "INVESTMENT",
-    "priority": "HIGH"
-  }'
-
-# Get workflow status
-curl -X GET http://localhost:8080/api/v1/workflow/status/{processInstanceId} \
-  -H "Authorization: Bearer <token>"
-
-# Get my workflows
-curl -X GET http://localhost:8080/api/v1/workflow/my-requests \
-  -H "Authorization: Bearer <token>"
-```
-
-### Task Operations
-
-```bash
-# Get tasks for current user
-curl -X GET http://localhost:8080/api/v1/tasks \
-  -H "Authorization: Bearer <token>"
-
-# Claim a task
-curl -X POST http://localhost:8080/api/v1/tasks/{taskId}/claim \
-  -H "Authorization: Bearer <token>"
-
-# Complete a task
-curl -X POST http://localhost:8080/api/v1/tasks/{taskId}/complete \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "decision": "APPROVED",
-    "comment": "Requirements verified, approved for next stage"
-  }'
-```
-
-### Audit Operations
-
-```bash
-# Get audit trail for a process (requires AUDITOR, ADMIN, or COMPLIANCE role)
-curl -X GET http://localhost:8080/api/v1/audit/process/{processInstanceId} \
-  -H "Authorization: Bearer <token>"
-
-# Get SLA breaches
-curl -X GET "http://localhost:8080/api/v1/audit/sla-breaches?since=2024-01-01T00:00:00" \
-  -H "Authorization: Bearer <token>"
-```
-
-## Workflow Stages
-
-### 1. Initial Review (8h SLA)
-
-- **Candidate Group**: REVIEWER
-- **Decisions**: APPROVED, REJECTED, NEEDS_INFO
-- **Escalation**: Manager on timeout
-
-### 2. Manager Approval (24h SLA)
-
-- **Candidate Group**: MANAGER
-- **Decisions**: APPROVED, REJECTED, ESCALATE
-- **Escalation**: Senior Manager on timeout
-
-### 3. Senior Manager Review (for escalated cases)
-
-- **Candidate Group**: SENIOR_MANAGER
-- **Decisions**: APPROVED, REJECTED
-
-### 4. Compliance Check (48h SLA) - External Task
-
-- **Topic**: compliance-check
-- **Results**: PASS, FAIL, REQUIRES_ADDITIONAL_INFO
-
-### 5. Compliance Manual Review (if needed)
-
-- **Candidate Group**: COMPLIANCE
-- **Decisions**: PASS, FAIL
-
-### 6. Final Approval (8h SLA)
-
-- **Candidate Groups**: ADMIN, SENIOR_MANAGER
-- **Decisions**: APPROVED, REJECTED
-
-## Security
-
-### Roles
-
-| Role           | Description         | Permissions                                 |
-| -------------- | ------------------- | ------------------------------------------- |
-| REVIEWER       | Initial assessment  | Start workflow, Initial Review tasks        |
-| MANAGER        | Business approval   | Manager Approval tasks, view team workflows |
-| SENIOR_MANAGER | Escalation handling | Handle escalations, Final Approval          |
-| COMPLIANCE     | Regulatory checks   | Compliance Review tasks                     |
-| AUDITOR        | Read-only audit     | View audit trails only                      |
-| ADMIN          | Full access         | All operations, terminate workflows         |
-
-### JWT Token Structure
-
-```json
-{
-  "sub": "user123",
-  "roles": ["REVIEWER", "MANAGER"],
-  "department": "RISK",
-  "iss": "regulatory-approval-system",
-  "iat": 1704067200,
-  "exp": 1704153600
-}
-```
-
-## Configuration
 
 ### Environment Variables
 
-| Variable                   | Description                       | Required |
-| -------------------------- | --------------------------------- | -------- |
-| `JWT_SECRET`               | JWT signing key (Base64, 512-bit) | Yes      |
-| `CAMUNDA_ADMIN_PASSWORD`   | Camunda admin password            | Yes      |
-| `APP_CORS_ALLOWED_ORIGINS` | CORS allowed origins              | No       |
-
-### Database Configuration
-
-The application uses **H2 in-memory database** by default:
-
-```yaml
-spring:
-  datasource:
-    url: jdbc:h2:mem:regulatory_db;DB_CLOSE_DELAY=-1;MODE=LEGACY
-    username: sa
-    password: (empty)
+```bash
+export JWT_SECRET=$(openssl rand -base64 64)
+export CAMUNDA_ADMIN_PASSWORD=admin
 ```
 
-Access the H2 console at: `http://localhost:8080/h2-console`
+### Running Locally
 
-### SLA Configuration
+```bash
+mvn clean install
+mvn spring-boot:run
+```
 
-SLA timers are configured in the BPMN file using ISO-8601 durations:
+- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
+- **Camunda Webapp**: `http://localhost:8080/camunda` (Login: `admin` / `${CAMUNDA_ADMIN_PASSWORD}`)
+- **H2 Console**: `http://localhost:8080/h2-console`
 
-| Stage            | Duration | BPMN Timer | Escalation Target |
-| ---------------- | -------- | ---------- | ----------------- |
-| Initial Review   | 8 hours  | `PT8H`     | Manager           |
-| Manager Approval | 24 hours | `PT24H`    | Senior Manager    |
-| Compliance Check | 48 hours | `PT48H`    | Compliance Lead   |
-| Final Approval   | 8 hours  | `PT8H`     | Admin             |
+---
 
-## Documentation
+## 🐳 Deployment & Docker
 
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Implementation guide, design decisions, and testing instructions
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and design patterns
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Detailed deployment guide and concepts
-- [Swagger UI](http://localhost:8080/swagger-ui.html) - Interactive API documentation
-- [Camunda Webapp](http://localhost:8080/camunda) - Process monitoring and administration
-- [H2 Console](http://localhost:8080/h2-console) - Database console (JDBC URL: jdbc:h2:mem:regulatory_db)
+The project is container-optimized with a multi-stage `Dockerfile`.
+
+### Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+### Render Deployment
+
+This project is pre-configured for **Render** via `render.yaml`. Use the Blueprint feature in the Render dashboard to deploy automatically.
+
+---
+
+## 🧪 Testing with Bruno
+
+A comprehensive [Bruno collection](bruno/RegulatoryApprovalSystem.json) is provided for end-to-end testing.
+
+1. Import the collection into [Bruno](https://www.usebruno.com/).
+2. Set the `baseUrl` environment variable to `http://localhost:8080`.
+3. Run the "Authentication" request to get a token.
+4. Follow the workflow chain: Start Workflow → Claim Task → Complete Task.

@@ -5,7 +5,6 @@ import java.util.Map;
 
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.ExecutionListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
@@ -13,6 +12,7 @@ import com.enterprise.regulatory.service.AuditService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -20,21 +20,12 @@ import lombok.extern.slf4j.Slf4j;
  * Uses static injection pattern required for Camunda listener integration.
  */
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class WorkflowStartListener implements ExecutionListener {
 
-    private static AuditService auditService;
-    private static ObjectMapper objectMapper;
-
-    @Autowired
-    public void setAuditService(AuditService service) {
-        WorkflowStartListener.auditService = service;
-    }
-
-    @Autowired
-    public void setObjectMapper(ObjectMapper mapper) {
-        WorkflowStartListener.objectMapper = mapper;
-    }
+    private final AuditService auditService;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void notify(DelegateExecution execution) {

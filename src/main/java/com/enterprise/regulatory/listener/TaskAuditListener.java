@@ -2,12 +2,12 @@ package com.enterprise.regulatory.listener;
 
 import org.camunda.bpm.engine.delegate.DelegateTask;
 import org.camunda.bpm.engine.delegate.TaskListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.enterprise.regulatory.service.AuditService;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -15,15 +15,11 @@ import lombok.extern.slf4j.Slf4j;
  * Captures task creation, assignment, and completion events.
  */
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class TaskAuditListener implements TaskListener {
 
-    private static AuditService auditService;
-
-    @Autowired
-    public void setAuditService(AuditService service) {
-        TaskAuditListener.auditService = service;
-    }
+    private final AuditService auditService;
 
     @Override
     public void notify(DelegateTask delegateTask) {

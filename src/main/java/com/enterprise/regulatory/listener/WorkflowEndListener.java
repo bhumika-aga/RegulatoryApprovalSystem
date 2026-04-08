@@ -2,12 +2,12 @@ package com.enterprise.regulatory.listener;
 
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.ExecutionListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.enterprise.regulatory.service.AuditService;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -15,15 +15,11 @@ import lombok.extern.slf4j.Slf4j;
  * Uses static injection pattern required for Camunda listener integration.
  */
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class WorkflowEndListener implements ExecutionListener {
 
-    private static AuditService auditService;
-
-    @Autowired
-    public void setAuditService(AuditService service) {
-        WorkflowEndListener.auditService = service;
-    }
+    private final AuditService auditService;
 
     @Override
     public void notify(DelegateExecution execution) {
