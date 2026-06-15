@@ -41,7 +41,7 @@ camunda:
   bpm:
     admin-user:
       id: admin
-      password: ${CAMUNDA_ADMIN_PASSWORD}
+      password: ${CAMUNDA_ADMIN_PASSWORD:admin}
       firstName: Admin
       lastName: User
     filter:
@@ -72,7 +72,7 @@ camunda:
 app:
   security:
     jwt:
-      secret-key: ${JWT_SECRET}
+      secret-key: ${JWT_SECRET:leH2JihS9j0XPl/Z9tSTjqZfg3qxokxw10bjQ9bZ0A3I8ors4EsWEu+XcGS+C4GcT+dknMMRH/oRrKxr18RWqQ==}
       expiration-ms: 86400000 # 24 hours
       refresh-expiration-ms: 604800000 # 7 days
       issuer: regulatory-approval-system
