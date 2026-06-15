@@ -47,37 +47,36 @@ public class SecurityConfig {
                                               .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                                                // Public endpoints
-                                               .requestMatchers("/api/v1/auth/**").permitAll()
-                                               .requestMatchers("/actuator/health", "/actuator/health/**",
-                                                   "/actuator/info").permitAll()
-                                               .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
-                                                   "/v3/api-docs/**")
+                                               .requestMatchers("/api/v1/auth/*").permitAll()
+                                               .requestMatchers("/actuator/*").permitAll()
+                                               .requestMatchers("/swagger-ui/*", "/swagger-ui.html",
+                                                   "/v3/api-docs/*")
                                                .permitAll()
                                                
                                                // Camunda webapp - public access (Camunda has its own auth)
-                                               .requestMatchers("/camunda/**").permitAll()
-                                               .requestMatchers("/camunda-welcome/**").permitAll()
+                                               .requestMatchers("/camunda/*").permitAll()
+                                               .requestMatchers("/camunda-welcome/*").permitAll()
                                                // Engine REST API - public for external task workers and API access
-                                               .requestMatchers("/engine-rest/**").permitAll()
+                                               .requestMatchers("/engine-rest/*").permitAll()
                                                
                                                // H2 Console (development only - should be disabled in production via
                                                // config)
-                                               .requestMatchers("/h2-console/**").permitAll()
+                                               .requestMatchers("/h2-console/*").permitAll()
                                                
                                                // Workflow endpoints - role-based
                                                .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
                                                .hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
-                                               .requestMatchers("/api/v1/workflow/**").authenticated()
+                                               .requestMatchers("/api/v1/workflow/*").authenticated()
                                                
                                                // Task endpoints - role-based
-                                               .requestMatchers("/api/v1/tasks/**").authenticated()
+                                               .requestMatchers("/api/v1/tasks/*").authenticated()
                                                
                                                // Audit endpoints - restricted
-                                               .requestMatchers("/api/v1/audit/**")
+                                               .requestMatchers("/api/v1/audit/*")
                                                .hasAnyRole("AUDITOR", "ADMIN", "COMPLIANCE")
                                                
                                                // Admin endpoints
-                                               .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                                               .requestMatchers("/api/v1/admin/*").hasRole("ADMIN")
                                                
                                                // All other requests require authentication
                                                .anyRequest().authenticated())
