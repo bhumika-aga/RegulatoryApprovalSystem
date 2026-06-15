@@ -1,0 +1,1420 @@
+{
+  "info": {
+    "name": "Regulatory Approval System",
+    "_postman_id": "b1e7c3a4-2f10-4d8e-9a21-regulatory0001",
+    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the requests top-to-bottom (or via the Collection Runner). Test scripts automatically capture the JWT tokens, process instance id, request id and task id into collection variables, so the whole approval flow can be executed without manual copy/paste.\n\nDefault flow (happy path):\n1. Authentication > Generate Token (Reviewer / Manager / Admin / Auditor)\n2. Workflow > Start Workflow  (risk scoring runs, Initial Review task is created)\n3. Tasks > Get My Tasks (Reviewer) -> Complete Task (APPROVED)\n4. Tasks > Get My Tasks (Manager) -> Complete Task (APPROVED)  (compliance check runs)\n5. Tasks > Get My Tasks (Admin) -> Complete Task (APPROVED)  (final approval)\n6. Workflow > Get Workflow Status -> APPROVED\n7. Audit > Get Audit Trail for Process\n\nAll example responses were captured from a live run of the service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "managerToken",
+      "value": ""
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "auditorToken",
+      "value": ""
+    },
+    {
+      "key": "processInstanceId",
+      "value": ""
+    },
+    {
+      "key": "requestId",
+      "value": ""
+    },
+    {
+      "key": "taskId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Generate Token (Reviewer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token', res.data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', res.data.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"alice.reviewer\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"REVIEWER\"]\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Token generated",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/auth/token",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "token"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"alice.reviewer\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"REVIEWER\"]\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Token generated successfully\",\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzUxMiJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzUxMiJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 86400,\n    \"username\": \"alice.reviewer\",\n    \"roles\": [\"REVIEWER\"],\n    \"department\": \"OPERATIONS\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:05.054817\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Generate Token (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('managerToken', pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"bob.manager\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"MANAGER\"]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Token (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('adminToken', pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"carol.admin\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"ADMIN\"]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Token (Auditor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('auditorToken', pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"dan.auditor\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"AUDITOR\"]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Refresh-Token",
+                "value": "{{refreshToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Workflow",
+      "item": [
+        {
+          "name": "Start Workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('processInstanceId', res.data.processInstanceId);",
+                  "pm.collectionVariables.set('requestId', res.data.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestTitle\": \"Onboard new payment vendor\",\n  \"requestDescription\": \"Approve integration of a new low-risk operational payment vendor\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 - Workflow started",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/workflow/start",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "workflow",
+                    "start"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"requestTitle\": \"Onboard new payment vendor\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}"
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Workflow started successfully\",\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"IN_REVIEW\",\n    \"currentStage\": \"INITIAL_REVIEW\",\n    \"submitterId\": \"alice.reviewer\",\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.065511\",\n    \"message\": \"Workflow started successfully\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:05.07\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Workflow Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/status/{{processInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "status",
+                "{{processInstanceId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Approved",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/workflow/status/{{processInstanceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "workflow",
+                    "status",
+                    "{{processInstanceId}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"APPROVED\",\n    \"currentStage\": \"COMPLETED\",\n    \"submitterId\": \"alice.reviewer\",\n    \"riskScore\": 55,\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.252239\",\n    \"completedAt\": \"2026-06-15T17:42:05.251829\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:06.10\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Workflow by Request ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "{{requestId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/my-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "my-requests"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workflows by User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/user/alice.reviewer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "user",
+                "alice.reviewer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workflows by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/by-status/APPROVED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "by-status",
+                "APPROVED"
+              ],
+              "description": "status: PENDING | IN_REVIEW | APPROVED | REJECTED | COMPLETED | TERMINATED"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Escalated Workflows",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/escalated",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "escalated"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminate Workflow",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/{{processInstanceId}}?reason=Duplicate request",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "{{processInstanceId}}"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Duplicate request"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Terminated",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/workflow/{{processInstanceId}}?reason=Duplicate request",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "workflow",
+                    "{{processInstanceId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "reason",
+                      "value": "Duplicate request"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Workflow terminated successfully\",\n  \"timestamp\": \"2026-06-15T17:42:08.451393\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "Get My Tasks (Reviewer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.length) { pm.collectionVariables.set('taskId', res.data[0].taskId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Initial Review available",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/tasks",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "tasks"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"taskId\": \"6c50dfb7-68b3-11f1-8f6e-aaa42a9eb1c7\",\n      \"taskName\": \"Initial Review\",\n      \"taskDefinitionKey\": \"Task_InitialReview\",\n      \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n      \"candidateGroups\": [\"REVIEWER\"],\n      \"createTime\": \"2026-06-15T12:12:05.087+00:00\",\n      \"priority\": 50,\n      \"requestTitle\": \"Onboard new payment vendor\",\n      \"requestType\": \"OPERATIONAL_CHANGE\",\n      \"department\": \"OPERATIONS\",\n      \"riskScore\": 55,\n      \"riskCategory\": \"MEDIUM\",\n      \"escalated\": false\n    }\n  ],\n  \"timestamp\": \"2026-06-15T17:42:05.20\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get My Tasks (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.length) { pm.collectionVariables.set('taskId', res.data[0].taskId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Tasks (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.length) { pm.collectionVariables.set('taskId', res.data[0].taskId); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tasks by Process",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/process/{{processInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "process",
+                "{{processInstanceId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Task Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Claim Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/claim",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "claim"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unclaim Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/unclaim",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "unclaim"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Task (APPROVED)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Looks good, low-risk operational change\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "decision must be one of: APPROVED, REJECTED, NEEDS_INFO, ESCALATE, PASS, FAIL"
+          },
+          "response": [
+            {
+              "name": "200 - Completed",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "tasks",
+                    "{{taskId}}",
+                    "complete"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Looks good\"\n}"
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Task completed successfully\",\n  \"timestamp\": \"2026-06-15T17:42:05.21\"\n}"
+            },
+            {
+              "name": "400 - Validation error",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "tasks",
+                    "{{taskId}}",
+                    "complete"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"decision\": \"BOGUS\"\n}"
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Validation failed\",\n  \"data\": {\n    \"decision\": \"Decision must be one of: APPROVED, REJECTED, NEEDS_INFO, ESCALATE, PASS, FAIL\"\n  },\n  \"path\": \"/api/v1/tasks/{{taskId}}/complete\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Complete Task (REJECTED)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"REJECTED\",\n  \"comment\": \"Does not meet regulatory criteria\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "Get Audit Trail for Process",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/process/{{processInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "process",
+                "{{processInstanceId}}"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Audit trail",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{auditorToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/audit/process/{{processInstanceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "audit",
+                    "process",
+                    "{{processInstanceId}}"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"id\": \"4a3ea5df-c826-44a1-94e8-afa5b7f905e3\",\n      \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n      \"taskName\": \"Workflow End\",\n      \"eventType\": \"WORKFLOW_COMPLETED\",\n      \"newValue\": \"APPROVED\",\n      \"performedBy\": \"system\",\n      \"comment\": \"Regulatory approval workflow completed with status: APPROVED\",\n      \"timestamp\": \"2026-06-15T17:42:05.268708\"\n    },\n    {\n      \"id\": \"054e41a0-d7fa-4eac-a569-0ddea7cc1afe\",\n      \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n      \"taskId\": \"6c68accb-68b3-11f1-8f6e-aaa42a9eb1c7\",\n      \"taskName\": \"Final Decision\",\n      \"eventType\": \"DECISION_MADE\",\n      \"newValue\": \"APPROVED\",\n      \"performedBy\": \"system\",\n      \"comment\": \"Final workflow outcome: APPROVED\",\n      \"timestamp\": \"2026-06-15T17:42:05.252973\"\n    }\n  ],\n  \"timestamp\": \"2026-06-15T17:42:07.00\"\n}"
+            },
+            {
+              "name": "403 - Forbidden (wrong role)",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/audit/process/{{processInstanceId}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "audit",
+                    "process",
+                    "{{processInstanceId}}"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": 403,\n  \"error\": \"Forbidden\",\n  \"message\": \"You do not have permission to access this resource\",\n  \"path\": \"/api/v1/audit/process/{{processInstanceId}}\",\n  \"timestamp\": \"2026-06-15T17:37:09.716919\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Audit Trail for Task",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/task/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "task",
+                "{{taskId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Audit Trail by User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/user/alice.reviewer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "user",
+                "alice.reviewer"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Audits by Event Type",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/event-type/WORKFLOW_COMPLETED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "event-type",
+                "WORKFLOW_COMPLETED"
+              ],
+              "description": "WORKFLOW_STARTED | TASK_CREATED | TASK_CLAIMED | TASK_COMPLETED | TASK_ESCALATED | DECISION_MADE | COMPLIANCE_CHECK_PASSED | COMPLIANCE_CHECK_FAILED | SLA_BREACH | WORKFLOW_COMPLETED | WORKFLOW_TERMINATED"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Audits by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/date-range?startDate=2026-01-01T00:00:00&endDate=2027-01-01T00:00:00",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "date-range"
+              ],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-01-01T00:00:00"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2027-01-01T00:00:00"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get SLA Breaches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/sla-breaches?since=2026-01-01T00:00:00",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "sla-breaches"
+              ],
+              "query": [
+                {
+                  "key": "since",
+                  "value": "2026-01-01T00:00:00"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Count Events Since",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/count/TASK_CREATED?since=2026-01-01T00:00:00",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "count",
+                "TASK_CREATED"
+              ],
+              "query": [
+                {
+                  "key": "since",
+                  "value": "2026-01-01T00:00:00"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check (Actuator)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - UP",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/actuator/health",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "actuator",
+                    "health"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"UP\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Unauthorized (no token)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "401 - Unauthorized",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/tasks",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "tasks"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"timestamp\": \"2026-06-15T17:06:33.466995\",\n  \"error\": \"Unauthorized\",\n  \"message\": \"Authentication is required to access this resource\",\n  \"status\": 401,\n  \"path\": \"/api/v1/tasks\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

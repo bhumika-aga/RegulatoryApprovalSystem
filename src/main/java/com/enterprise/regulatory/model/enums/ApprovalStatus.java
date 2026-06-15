@@ -5,7 +5,6 @@ public enum ApprovalStatus {
     IN_REVIEW,
     APPROVED,
     REJECTED,
-    ESCALATED,
     COMPLETED,
     TERMINATED
 }

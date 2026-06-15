@@ -1,6 +1,6 @@
 # Multi-stage build for Regulatory Approval System
 # Stage 1: Build
-FROM eclipse-temurin:17-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk-alpine AS builder
 
 # Install Maven
 RUN apk add --no-cache maven
@@ -20,7 +20,7 @@ COPY src src
 RUN mvn package -DskipTests -B
 
 # Stage 2: Runtime
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
@@ -41,7 +41,7 @@ EXPOSE 8080
 
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
-    CMD wget -q --spider http://localhost:8080/api/v1/health || exit 1
+    CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
 
 # JVM options optimized for low memory (512MB free tier)
 # - Xmx384m: Hard limit heap to 384MB

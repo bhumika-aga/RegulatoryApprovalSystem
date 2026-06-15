@@ -1,12 +1,11 @@
 package com.enterprise.regulatory.security;
 
-import java.util.List;
-
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.IdentityService;
 import org.springframework.stereotype.Service;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
 
 /**
  * Service to synchronize JWT roles with Camunda identity groups at runtime.
@@ -17,9 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class CamundaIdentityService {
-
+    
     private final IdentityService identityService;
-
+    
     /**
      * Sets the authenticated user and their groups in Camunda's identity context.
      * This is called on each request to sync JWT roles with Camunda.
@@ -34,24 +33,5 @@ public class CamundaIdentityService {
         } catch (Exception e) {
             log.error("Failed to sync user groups with Camunda: {}", e.getMessage());
         }
-    }
-
-    /**
-     * Clears the Camunda identity context.
-     * Should be called after request processing is complete.
-     */
-    public void clearAuthentication() {
-        identityService.clearAuthentication();
-    }
-
-    /**
-     * Gets the currently authenticated user from Camunda context.
-     *
-     * @return the authenticated user ID or null
-     */
-    public String getCurrentUserId() {
-        return identityService.getCurrentAuthentication() != null
-                ? identityService.getCurrentAuthentication().getUserId()
-                : null;
     }
 }

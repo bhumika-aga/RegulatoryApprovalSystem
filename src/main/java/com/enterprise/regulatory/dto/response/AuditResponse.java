@@ -1,15 +1,14 @@
 package com.enterprise.regulatory.dto.response;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.fasterxml.jackson.annotation.JsonInclude;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -17,7 +16,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AuditResponse {
-
+    
     private UUID id;
     private String processInstanceId;
     private String taskId;

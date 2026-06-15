@@ -1,15 +1,14 @@
 package com.enterprise.regulatory.dto.response;
 
-import java.util.Date;
-import java.util.Map;
-import java.util.Set;
-
 import com.fasterxml.jackson.annotation.JsonInclude;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.Date;
+import java.util.Map;
+import java.util.Set;
 
 @Data
 @Builder
@@ -17,7 +16,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class TaskResponse {
-
+    
     private String taskId;
     private String taskName;
     private String taskDefinitionKey;
@@ -30,7 +29,7 @@ public class TaskResponse {
     private String description;
     private Integer priority;
     private Map<String, Object> variables;
-
+    
     // Request details
     private String requestTitle;
     private String requestType;
