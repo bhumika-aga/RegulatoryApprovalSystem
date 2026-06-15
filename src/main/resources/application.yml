@@ -100,10 +100,7 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: when_authorized
-  info:
-    env:
-      enabled: true
+      show-details: always
 
 # Logging Configuration
 logging:
