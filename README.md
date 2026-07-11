@@ -90,13 +90,14 @@ Authentication is **stateless JWT** (HS512). A token carries the subject (userna
 claim — issued by `POST /api/v1/auth/token` after verifying a **username + password** against a configured user store
 (`app.security.auth.users`; passwords are BCrypt-hashed at startup). **Roles and department come from that store, not
 from the request**, so a caller cannot grant itself privileges. This store is a self-contained stand-in for an external
-IdP in production. `POST /api/v1/auth/refresh` re-derives the current roles/department from the store rather than trusting
+IdP in production. `POST /api/v1/auth/refresh` re-derives the current roles/department from the store rather than
+trusting
 the refresh token.
 
 Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridable individually via
 `AUTH_<ROLE>_PASSWORD`): `admin`, `reviewer`, `manager`, `senior.manager`, `compliance`, `auditor`.
 
-- `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and synchronises the
+- `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and synchronizes the
   authenticated user id into Camunda's `IdentityService` so the engine can resolve candidate-group task assignment.
 - URL- and method-level authorization (`@PreAuthorize`) enforce role access.
 - `JwtAuthenticationEntryPoint` returns a clean **401** when authentication is missing/invalid; `JwtAccessDeniedHandler`
@@ -179,25 +180,25 @@ src/main/resources/
 
 Base path: `/api/v1`. All endpoints except auth, health and the API docs require a `Bearer` token.
 
-| Method & Path                               | Role(s)                        | Description                         |
-|:--------------------------------------------|:-------------------------------|:------------------------------------|
+| Method & Path                               | Role(s)                        | Description                            |
+|:--------------------------------------------|:-------------------------------|:---------------------------------------|
 | `POST /auth/token`                          | public (username + password)   | Authenticate → access + refresh tokens |
-| `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                       |
-| `GET  /health`                              | public                         | Health probe                        |
-| `POST /workflow/start`                      | REVIEWER, MANAGER, ADMIN       | Start an approval workflow          |
-| `GET  /workflow/status/{processInstanceId}` | authenticated                  | Current workflow state              |
-| `GET  /workflow/{requestId}`                | authenticated                  | Workflow by request UUID            |
-| `GET  /workflow/my-requests`                | authenticated                  | Caller's submissions                |
-| `GET  /workflow/user/{userId}`              | MANAGER, ADMIN, AUDITOR        | Submissions by a user               |
-| `GET  /workflow/by-status/{status}`         | MANAGER, ADMIN, AUDITOR        | Filter by status                    |
-| `GET  /workflow/escalated`                  | SENIOR_MANAGER, ADMIN, AUDITOR | Escalated workflows                 |
-| `DELETE /workflow/{processInstanceId}`      | ADMIN                          | Terminate a workflow                |
-| `GET  /tasks`                               | authenticated                  | Tasks assigned to / available to me |
-| `GET  /tasks/process/{processInstanceId}`   | authenticated                  | Active tasks for an instance        |
-| `GET  /tasks/{taskId}`                      | authenticated                  | Task details                        |
-| `POST /tasks/{taskId}/claim` · `/unclaim`   | authenticated                  | Claim / release a task              |
-| `POST /tasks/{taskId}/complete`             | authenticated                  | Complete with a decision            |
-| `GET  /audit/**`                            | AUDITOR, ADMIN, COMPLIANCE     | Audit trail queries                 |
+| `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                          |
+| `GET  /health`                              | public                         | Health probe                           |
+| `POST /workflow/start`                      | REVIEWER, MANAGER, ADMIN       | Start an approval workflow             |
+| `GET  /workflow/status/{processInstanceId}` | authenticated                  | Current workflow state                 |
+| `GET  /workflow/{requestId}`                | authenticated                  | Workflow by request UUID               |
+| `GET  /workflow/my-requests`                | authenticated                  | Caller's submissions                   |
+| `GET  /workflow/user/{userId}`              | MANAGER, ADMIN, AUDITOR        | Submissions by a user                  |
+| `GET  /workflow/by-status/{status}`         | MANAGER, ADMIN, AUDITOR        | Filter by status                       |
+| `GET  /workflow/escalated`                  | SENIOR_MANAGER, ADMIN, AUDITOR | Escalated workflows                    |
+| `DELETE /workflow/{processInstanceId}`      | ADMIN                          | Terminate a workflow                   |
+| `GET  /tasks`                               | authenticated                  | Tasks assigned to / available to me    |
+| `GET  /tasks/process/{processInstanceId}`   | authenticated                  | Active tasks for an instance           |
+| `GET  /tasks/{taskId}`                      | authenticated                  | Task details                           |
+| `POST /tasks/{taskId}/claim` · `/unclaim`   | authenticated                  | Claim / release a task                 |
+| `POST /tasks/{taskId}/complete`             | authenticated                  | Complete with a decision               |
+| `GET  /audit/**`                            | AUDITOR, ADMIN, COMPLIANCE     | Audit trail queries                    |
 
 `complete` accepts a `decision` of `APPROVED`, `REJECTED`, `NEEDS_INFO`, `ESCALATE`, `PASS` or `FAIL` (validated),
 an optional `comment`, and optional `additionalVariables`.
@@ -216,7 +217,8 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
 
 `mvn verify` runs the test suite:
 
-- **`AuthUserServiceTest`** — unit tests for credential verification (BCrypt match, unknown user, case-insensitive lookup).
+- **`AuthUserServiceTest`** — unit tests for credential verification (BCrypt match, unknown user, case-insensitive
+  lookup).
 - **`SecurityAuthorizationIntegrationTest`** — full-stack tests over real HTTP covering the auth matrix (400/401/200,
   refresh preserving roles, server-controlled roles), **task-level authorization** (a role can only complete tasks its
   candidate group owns), and **read scoping** (a user cannot read another user's workflow/tasks unless they hold an
@@ -263,9 +265,11 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 - **Swagger UI**: `http://localhost:8080/swagger-ui.html`
 - **Camunda Webapp**: `http://localhost:8080/camunda` (login `admin` / `${CAMUNDA_ADMIN_PASSWORD}`)
-- **H2 Console**: `http://localhost:8080/h2-console` — **`dev` profile only** (JDBC `jdbc:h2:mem:regulatory_db`, user `sa`).
+- **H2 Console**: `http://localhost:8080/h2-console` — **`dev` profile only** (JDBC `jdbc:h2:mem:regulatory_db`, user
+  `sa`).
   It is disabled in the default/production configuration.
-- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator; the only publicly reachable actuator endpoint)
+- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator; the only publicly reachable actuator
+  endpoint)
 
 ---
 

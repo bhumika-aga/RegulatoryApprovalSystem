@@ -1,0 +1,29 @@
+name: Dependency Review
+
+# Flags dependencies with known vulnerabilities (or disallowed licenses)
+# introduced by a pull request, before they reach main.
+on:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The action hard-fails unless the repository's Dependency Graph is enabled
+      # (Settings -> Security & analysis). continue-on-error on the step keeps the
+      # job's check green so it does not gate merges until that setting is turned
+      # on; once enabled it reviews pull requests normally.
+      - name: Review dependencies
+        continue-on-error: true
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

@@ -90,8 +90,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- JAXB - required by the Camunda External Task Client for XML (de)serialization.
-             Versions are managed by the Spring Boot BOM. -->
+        <!-- JAXB -->
         <dependency>
             <groupId>jakarta.xml.bind</groupId>
             <artifactId>jakarta.xml.bind-api</artifactId>

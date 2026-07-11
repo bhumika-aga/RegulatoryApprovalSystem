@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a problem with the Regulatory Approval System
+labels: [ bug ]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug. Please do not include secrets, tokens, or JWTs in logs.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+      placeholder: Completing a task as a MANAGER returned 500 instead of ...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the request (method + path), role/token used, and body.
+      placeholder: |
+        1. POST /api/v1/auth/token as reviewer
+        2. POST /api/v1/workflow/start ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any relevant log output (redact secrets).
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Git commit SHA or release tag.
+    validations:
+      required: false
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local (mvn spring-boot:run)
+        - Docker / docker-compose
+        - Render
+        - Other
+    validations:
+      required: true

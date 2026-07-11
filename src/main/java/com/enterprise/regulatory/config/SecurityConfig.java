@@ -36,7 +36,7 @@ public class SecurityConfig {
     
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}")
     private String allowedOrigins;
-
+    
     /**
      * Whether the H2 console is exposed. Off by default; enabled only via the
      * {@code dev} profile (see {@code application-dev.yml}). When false the
@@ -44,7 +44,7 @@ public class SecurityConfig {
      */
     @Value("${app.security.h2-console-exposed:false}")
     private boolean h2ConsoleExposed;
-
+    
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -66,7 +66,7 @@ public class SecurityConfig {
                     .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                         "/v3/api-docs/**")
                     .permitAll()
-
+                    
                     // Camunda webapp - guarded by Camunda's own login page (only the
                     // configured admin user exists), so Spring delegates auth to it.
                     .requestMatchers("/camunda/**").permitAll()
@@ -74,28 +74,28 @@ public class SecurityConfig {
                     // Engine REST API - guarded by Camunda's ProcessEngineAuthenticationFilter
                     // (HTTP Basic, see CamundaSecurityConfig). No longer anonymously public.
                     .requestMatchers("/engine-rest/**").permitAll();
-
+                
                 // H2 Console - only reachable when explicitly exposed (dev profile).
                 if (h2ConsoleExposed) {
                     auth.requestMatchers("/h2-console/**").permitAll();
                 }
-
+                
                 auth
                     // Workflow endpoints - role-based
                     .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
                     .hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
                     .requestMatchers("/api/v1/workflow/**").authenticated()
-
+                    
                     // Task endpoints - role-based
                     .requestMatchers("/api/v1/tasks/**").authenticated()
-
+                    
                     // Audit endpoints - restricted
                     .requestMatchers("/api/v1/audit/**")
                     .hasAnyRole("AUDITOR", "ADMIN", "COMPLIANCE")
-
+                    
                     // Admin endpoints
                     .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-
+                    
                     // All other requests require authentication
                     .anyRequest().authenticated();
             })
@@ -106,7 +106,7 @@ public class SecurityConfig {
                 }
             })
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
+        
         return http.build();
     }
     
@@ -114,7 +114,7 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
+    
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();

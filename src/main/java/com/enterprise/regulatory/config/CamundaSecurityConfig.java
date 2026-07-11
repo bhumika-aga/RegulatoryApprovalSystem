@@ -29,7 +29,7 @@ import java.util.Map;
  */
 @Configuration
 public class CamundaSecurityConfig {
-
+    
     /**
      * Registers Camunda's authentication filter over the engine REST API so that every
      * {@code /engine-rest/*} call must carry valid HTTP Basic credentials.

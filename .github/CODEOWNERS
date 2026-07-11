@@ -1,0 +1,7 @@
+# Default owner for everything in the repo.
+* @bhumika-aga
+
+# Security-sensitive areas — flag explicitly so changes get a closer look.
+/src/main/java/com/enterprise/regulatory/security/  @bhumika-aga
+/src/main/java/com/enterprise/regulatory/config/    @bhumika-aga
+/.github/                                            @bhumika-aga

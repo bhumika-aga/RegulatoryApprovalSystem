@@ -26,12 +26,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class AuthUserService {
-
+    
     private final AuthUserProperties properties;
     private final PasswordEncoder passwordEncoder;
-
+    
     private final Map<String, StoredUser> usersByName = new ConcurrentHashMap<>();
-
+    
     @PostConstruct
     void init() {
         for (AuthUserProperties.User user : properties.getUsers()) {
@@ -44,13 +44,13 @@ public class AuthUserService {
         }
         if (usersByName.isEmpty()) {
             log.warn("No auth users configured under app.security.auth.users — "
-                + "the token endpoint will reject all logins.");
+                         + "the token endpoint will reject all logins.");
         } else {
             log.info("Loaded {} auth user(s): {}", usersByName.size(),
                 usersByName.values().stream().map(StoredUser::username).collect(Collectors.toList()));
         }
     }
-
+    
     /**
      * Verifies a username/password pair. Returns the stored user on success,
      * or empty on unknown user or bad password (callers must not distinguish
@@ -66,42 +66,46 @@ public class AuthUserService {
         }
         return Optional.of(user);
     }
-
-    /** Looks up a user by name without a password check — used when refreshing tokens. */
+    
+    /**
+     * Looks up a user by name without a password check — used when refreshing tokens.
+     */
     public Optional<StoredUser> findByUsername(String username) {
         if (username == null) {
             return Optional.empty();
         }
         return Optional.ofNullable(usersByName.get(username.toLowerCase()));
     }
-
-    /** Immutable view of a configured user with its hashed password. */
+    
+    /**
+     * Immutable view of a configured user with its hashed password.
+     */
     @Getter
     public static final class StoredUser {
         private final String username;
         private final String passwordHash;
         private final List<String> roles;
         private final String department;
-
+        
         StoredUser(String username, String passwordHash, List<String> roles, String department) {
             this.username = username;
             this.passwordHash = passwordHash;
             this.roles = roles;
             this.department = department;
         }
-
+        
         public String username() {
             return username;
         }
-
+        
         public String passwordHash() {
             return passwordHash;
         }
-
+        
         public List<String> roles() {
             return roles;
         }
-
+        
         public String department() {
             return department;
         }
