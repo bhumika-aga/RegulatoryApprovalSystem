@@ -34,7 +34,15 @@ public class SecurityConfig {
     
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:8080}")
     private String allowedOrigins;
-    
+
+    /**
+     * Whether the H2 console is exposed. Off by default; enabled only via the
+     * {@code dev} profile (see {@code application-dev.yml}). When false the
+     * console path is not permitted and frames stay denied.
+     */
+    @Value("${app.security.h2-console-exposed:false}")
+    private boolean h2ConsoleExposed;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -45,45 +53,58 @@ public class SecurityConfig {
                                                 .accessDeniedHandler(jwtAccessDeniedHandler))
             .sessionManagement(session -> session
                                               .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                                               // Public endpoints
-                                               .requestMatchers("/api/v1/auth/**").permitAll()
-                                               .requestMatchers("/actuator/**").permitAll()
-                                               .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
-                                                   "/v3/api-docs/**")
-                                               .permitAll()
-                                               
-                                               // Camunda webapp - public access (Camunda has its own auth)
-                                               .requestMatchers("/camunda/**").permitAll()
-                                               .requestMatchers("/camunda-welcome/**").permitAll()
-                                               // Engine REST API - public for external task workers and API access
-                                               .requestMatchers("/engine-rest/**").permitAll()
-                                               
-                                               // H2 Console (development only - should be disabled in production via
-                                               // config)
-                                               .requestMatchers("/h2-console/**").permitAll()
-                                               
-                                               // Workflow endpoints - role-based
-                                               .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
-                                               .hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
-                                               .requestMatchers("/api/v1/workflow/**").authenticated()
-                                               
-                                               // Task endpoints - role-based
-                                               .requestMatchers("/api/v1/tasks/**").authenticated()
-                                               
-                                               // Audit endpoints - restricted
-                                               .requestMatchers("/api/v1/audit/**")
-                                               .hasAnyRole("AUDITOR", "ADMIN", "COMPLIANCE")
-                                               
-                                               // Admin endpoints
-                                               .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                                               
-                                               // All other requests require authentication
-                                               .anyRequest().authenticated())
-            // Allow H2 console to use frames (development only)
-            .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin))
+            .authorizeHttpRequests(auth -> {
+                auth
+                    // Public endpoints
+                    .requestMatchers("/api/v1/auth/**").permitAll()
+                    // Health probe stays public for the platform (Render) health check;
+                    // all other actuator endpoints (metrics, info, ...) require authentication.
+                    .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                    .requestMatchers("/actuator/**").authenticated()
+                    .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
+                        "/v3/api-docs/**")
+                    .permitAll()
+
+                    // Camunda webapp - guarded by Camunda's own login page (only the
+                    // configured admin user exists), so Spring delegates auth to it.
+                    .requestMatchers("/camunda/**").permitAll()
+                    .requestMatchers("/camunda-welcome/**").permitAll()
+                    // Engine REST API - guarded by Camunda's ProcessEngineAuthenticationFilter
+                    // (HTTP Basic, see CamundaSecurityConfig). No longer anonymously public.
+                    .requestMatchers("/engine-rest/**").permitAll();
+
+                // H2 Console - only reachable when explicitly exposed (dev profile).
+                if (h2ConsoleExposed) {
+                    auth.requestMatchers("/h2-console/**").permitAll();
+                }
+
+                auth
+                    // Workflow endpoints - role-based
+                    .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
+                    .hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
+                    .requestMatchers("/api/v1/workflow/**").authenticated()
+
+                    // Task endpoints - role-based
+                    .requestMatchers("/api/v1/tasks/**").authenticated()
+
+                    // Audit endpoints - restricted
+                    .requestMatchers("/api/v1/audit/**")
+                    .hasAnyRole("AUDITOR", "ADMIN", "COMPLIANCE")
+
+                    // Admin endpoints
+                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+
+                    // All other requests require authentication
+                    .anyRequest().authenticated();
+            })
+            // Frames are denied by default; only relaxed for the H2 console when exposed (dev).
+            .headers(headers -> {
+                if (h2ConsoleExposed) {
+                    headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin);
+                }
+            })
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-        
+
         return http.build();
     }
     

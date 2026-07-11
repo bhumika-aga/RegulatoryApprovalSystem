@@ -14,10 +14,11 @@ spring:
     password:
     driver-class-name: org.h2.Driver
 
-  # H2 Console (for debugging)
+  # H2 Console (for debugging) - disabled by default; enabled only under the `dev`
+  # profile (see application-dev.yml) so it is never exposed in production.
   h2:
     console:
-      enabled: true
+      enabled: false
       path: /h2-console
       settings:
         web-allow-others: false
@@ -93,6 +94,9 @@ springdoc:
     try-it-out-enabled: true
 
 # Actuator Configuration
+# Only /actuator/health is publicly reachable (for the platform health check);
+# info and metrics are exposed but require authentication (see SecurityConfig).
+# Health details are shown only to authenticated callers, never anonymously.
 management:
   endpoints:
     web:
@@ -100,7 +104,9 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
+      probes:
+        enabled: true
 
 # Logging Configuration
 logging:

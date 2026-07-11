@@ -94,6 +94,15 @@ claim — issued by `POST /api/v1/auth/token` (a stand-in for an external IdP in
 - `JwtAuthenticationEntryPoint` returns a clean **401** when authentication is missing/invalid; `JwtAccessDeniedHandler`
   returns **403** when an authenticated user lacks the required role.
 
+**Surface hardening.** Only what has to be public is public:
+
+- `/actuator/health` is anonymous (platform health check); all other actuator endpoints require authentication, and
+  health details are shown only to authenticated callers.
+- The Camunda webapp (`/camunda/**`) is protected by Camunda's own login — only the configured `admin` user exists.
+- The raw engine REST API (`/engine-rest/**`), used only by the external task workers, is guarded by Camunda's
+  `ProcessEngineAuthenticationFilter` (HTTP Basic); the worker client authenticates with the admin credentials.
+- The H2 console is disabled outside the `dev` profile.
+
 | Role             | Capabilities                                            |
 |:-----------------|:--------------------------------------------------------|
 | `REVIEWER`       | Start workflows, perform Initial Review                 |
@@ -227,14 +236,15 @@ export CAMUNDA_ADMIN_PASSWORD=admin
 ```bash
 mvn clean package
 JWT_SECRET=$JWT_SECRET CAMUNDA_ADMIN_PASSWORD=$CAMUNDA_ADMIN_PASSWORD java -jar target/regulatory-approval-system-1.0.0.jar
-# or, for development:
-mvn spring-boot:run
+# or, for development (enables the H2 console — see below):
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 - **Swagger UI**: `http://localhost:8080/swagger-ui.html`
 - **Camunda Webapp**: `http://localhost:8080/camunda` (login `admin` / `${CAMUNDA_ADMIN_PASSWORD}`)
-- **H2 Console**: `http://localhost:8080/h2-console` (JDBC `jdbc:h2:mem:regulatory_db`, user `sa`)
-- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator)
+- **H2 Console**: `http://localhost:8080/h2-console` — **`dev` profile only** (JDBC `jdbc:h2:mem:regulatory_db`, user `sa`).
+  It is disabled in the default/production configuration.
+- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator; the only publicly reachable actuator endpoint)
 
 ---
 
