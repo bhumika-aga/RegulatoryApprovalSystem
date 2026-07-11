@@ -86,13 +86,29 @@ available. On exhausting retries each worker applies a fallback suited to how cr
 ### 4. Security model
 
 Authentication is **stateless JWT** (HS512). A token carries the subject (username), a `roles` claim and a `department`
-claim — issued by `POST /api/v1/auth/token` (a stand-in for an external IdP in production).
+claim — issued by `POST /api/v1/auth/token` after verifying a **username + password** against a configured user store
+(`app.security.auth.users`; passwords are BCrypt-hashed at startup). **Roles and department come from that store, not
+from the request**, so a caller cannot grant itself privileges. This store is a self-contained stand-in for an external
+IdP in production. `POST /api/v1/auth/refresh` re-derives the current roles/department from the store rather than trusting
+the refresh token.
+
+Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridable individually via
+`AUTH_<ROLE>_PASSWORD`): `admin`, `reviewer`, `manager`, `senior.manager`, `compliance`, `auditor`.
 
 - `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and synchronises the
   authenticated user id into Camunda's `IdentityService` so the engine can resolve candidate-group task assignment.
 - URL- and method-level authorization (`@PreAuthorize`) enforce role access.
 - `JwtAuthenticationEntryPoint` returns a clean **401** when authentication is missing/invalid; `JwtAccessDeniedHandler`
   returns **403** when an authenticated user lacks the required role.
+
+**Surface hardening.** Only what has to be public is public:
+
+- `/actuator/health` is anonymous (platform health check); all other actuator endpoints require authentication, and
+  health details are shown only to authenticated callers.
+- The Camunda webapp (`/camunda/**`) is protected by Camunda's own login — only the configured `admin` user exists.
+- The raw engine REST API (`/engine-rest/**`), used only by the external task workers, is guarded by Camunda's
+  `ProcessEngineAuthenticationFilter` (HTTP Basic); the worker client authenticates with the admin credentials.
+- The H2 console is disabled outside the `dev` profile.
 
 | Role             | Capabilities                                            |
 |:-----------------|:--------------------------------------------------------|
@@ -164,7 +180,7 @@ Base path: `/api/v1`. All endpoints except auth, health and the API docs require
 
 | Method & Path                               | Role(s)                        | Description                         |
 |:--------------------------------------------|:-------------------------------|:------------------------------------|
-| `POST /auth/token`                          | public                         | Issue access + refresh tokens       |
+| `POST /auth/token`                          | public (username + password)   | Authenticate → access + refresh tokens |
 | `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                       |
 | `GET  /health`                              | public                         | Health probe                        |
 | `POST /workflow/start`                      | REVIEWER, MANAGER, ADMIN       | Start an approval workflow          |
@@ -220,6 +236,7 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
 ```bash
 export JWT_SECRET=$(openssl rand -base64 64)   # Base64, decodes to ≥ 64 bytes for HS512
 export CAMUNDA_ADMIN_PASSWORD=admin
+export AUTH_DEFAULT_PASSWORD='ChangeMe123!'    # password for the seeded API users (admin, reviewer, manager, ...)
 ```
 
 ### Run locally
@@ -227,14 +244,15 @@ export CAMUNDA_ADMIN_PASSWORD=admin
 ```bash
 mvn clean package
 JWT_SECRET=$JWT_SECRET CAMUNDA_ADMIN_PASSWORD=$CAMUNDA_ADMIN_PASSWORD java -jar target/regulatory-approval-system-1.0.0.jar
-# or, for development:
-mvn spring-boot:run
+# or, for development (enables the H2 console — see below):
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
 - **Swagger UI**: `http://localhost:8080/swagger-ui.html`
 - **Camunda Webapp**: `http://localhost:8080/camunda` (login `admin` / `${CAMUNDA_ADMIN_PASSWORD}`)
-- **H2 Console**: `http://localhost:8080/h2-console` (JDBC `jdbc:h2:mem:regulatory_db`, user `sa`)
-- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator)
+- **H2 Console**: `http://localhost:8080/h2-console` — **`dev` profile only** (JDBC `jdbc:h2:mem:regulatory_db`, user `sa`).
+  It is disabled in the default/production configuration.
+- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator; the only publicly reachable actuator endpoint)
 
 ---
 

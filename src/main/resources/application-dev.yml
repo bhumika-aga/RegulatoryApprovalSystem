@@ -1,0 +1,22 @@
+# Development profile overrides.
+#
+# Activate with:  SPRING_PROFILES_ACTIVE=dev  (or `mvn spring-boot:run -Dspring-boot.run.profiles=dev`)
+#
+# This profile relaxes a couple of production hardening defaults for local
+# debugging ONLY. It must never be activated in production (e.g. on Render).
+spring:
+  # Re-enable the H2 web console at /h2-console for local inspection.
+  h2:
+    console:
+      enabled: true
+
+app:
+  security:
+    # Tells SecurityConfig to permit /h2-console/** and relax frame options so the
+    # console UI (which renders in frames) works. Off in the default/prod config.
+    h2-console-exposed: true
+
+# Verbose SQL for local debugging.
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
