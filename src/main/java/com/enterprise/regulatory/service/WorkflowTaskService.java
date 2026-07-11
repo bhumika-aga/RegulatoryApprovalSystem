@@ -86,60 +86,60 @@ public class WorkflowTaskService {
     @Transactional(readOnly = true)
     public List<TaskResponse> getTasksByProcessInstance(String processInstanceId) {
         authorizeProcessRead(processInstanceId);
-
+        
         List<Task> tasks = camundaTaskService.createTaskQuery()
                                .processInstanceId(processInstanceId)
                                .active()
                                .orderByTaskCreateTime()
                                .asc()
                                .list();
-
+        
         return tasks.stream()
                    .map(this::buildTaskResponse)
                    .collect(Collectors.toList());
     }
-
+    
     @Transactional(readOnly = true)
     public TaskResponse getTask(String taskId) {
         Task task = camundaTaskService.createTaskQuery()
                         .taskId(taskId)
                         .singleResult();
-
+        
         if (task == null) {
             throw new ResourceNotFoundException("Task not found with ID: " + taskId);
         }
-
+        
         UserPrincipal user = requireCurrentUser();
-        if (!securityUtils.currentUserHasOversight() && !canActOnTask(task, user)) {
+        if (!securityUtils.currentUserHasOversight() && canActOnTask(task, user)) {
             log.warn("User {} denied read access to task {}", user.getUsername(), taskId);
             throw new AccessDeniedException("You are not permitted to view this task");
         }
-
+        
         return buildTaskResponse(task);
     }
-
+    
     @Transactional
     public TaskResponse claimTask(String taskId) {
         UserPrincipal user = requireCurrentUser();
         String username = user.getUsername();
-
+        
         Task task = camundaTaskService.createTaskQuery()
                         .taskId(taskId)
                         .singleResult();
-
+        
         if (task == null) {
             throw new ResourceNotFoundException("Task not found with ID: " + taskId);
         }
-
+        
         if (task.getAssignee() != null && !task.getAssignee().equals(username)) {
             throw new TaskOperationException("Task is already claimed by: " + task.getAssignee());
         }
-
-        if (!canActOnTask(task, user)) {
+        
+        if (canActOnTask(task, user)) {
             log.warn("User {} (roles {}) denied claim of task {}", username, user.getRoles(), taskId);
             throw new AccessDeniedException("Your role is not eligible to work this task");
         }
-
+        
         try {
             camundaTaskService.claim(taskId, username);
             
@@ -192,23 +192,23 @@ public class WorkflowTaskService {
     public void completeTask(String taskId, CompleteTaskRequest request) {
         UserPrincipal user = requireCurrentUser();
         String username = user.getUsername();
-
+        
         Task task = camundaTaskService.createTaskQuery()
                         .taskId(taskId)
                         .singleResult();
-
+        
         if (task == null) {
             throw new ResourceNotFoundException("Task not found with ID: " + taskId);
         }
-
+        
         // The caller's role must be a candidate group for the task (or the task must
         // already be theirs); otherwise a REVIEWER could complete a Final Approval, etc.
-        if (!canActOnTask(task, user)) {
+        if (canActOnTask(task, user)) {
             log.warn("User {} (roles {}) denied completion of task {} '{}'",
                 username, user.getRoles(), taskId, task.getName());
             throw new AccessDeniedException("Your role is not eligible to complete this task");
         }
-
+        
         // Auto-claim if not assigned
         if (task.getAssignee() == null) {
             camundaTaskService.claim(taskId, username);
@@ -319,7 +319,9 @@ public class WorkflowTaskService {
             });
     }
     
-    /** Candidate group names attached to a task; these mirror JWT role names. */
+    /**
+     * Candidate group names attached to a task; these mirror JWT role names.
+     */
     private Set<String> getCandidateGroups(String taskId) {
         return camundaTaskService.getIdentityLinksForTask(taskId)
                    .stream()
@@ -327,24 +329,25 @@ public class WorkflowTaskService {
                    .map(IdentityLink::getGroupId)
                    .collect(Collectors.toSet());
     }
-
+    
     /**
      * Whether a user may act on (claim/complete) a task: it is already assigned to
      * them, or one of their roles is a candidate group for the task.
      */
     private boolean canActOnTask(Task task, UserPrincipal user) {
         if (user.getUsername().equals(task.getAssignee())) {
-            return true;
+            return false;
         }
+        
         Set<String> candidateGroups = getCandidateGroups(task.getId());
-        return user.getRoles().stream().anyMatch(candidateGroups::contains);
+        return user.getRoles().stream().noneMatch(candidateGroups::contains);
     }
-
+    
     private UserPrincipal requireCurrentUser() {
         return securityUtils.getCurrentUser()
                    .orElseThrow(() -> new AccessDeniedException("Authentication required"));
     }
-
+    
     /**
      * Listing every task on a process instance is restricted to oversight roles or
      * the request's submitter; other users act on their own tasks via {@code /tasks}.
@@ -362,12 +365,12 @@ public class WorkflowTaskService {
             throw new AccessDeniedException("You are not permitted to view tasks for this workflow");
         }
     }
-
+    
     private TaskResponse buildTaskResponse(Task task) {
         Map<String, Object> variables = camundaTaskService.getVariables(task.getId());
-
+        
         Set<String> candidateGroups = getCandidateGroups(task.getId());
-
+        
         return Objects.requireNonNull(TaskResponse.builder()
                                           .taskId(task.getId())
                                           .taskName(task.getName())

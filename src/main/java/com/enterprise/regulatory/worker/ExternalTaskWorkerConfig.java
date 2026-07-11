@@ -30,20 +30,20 @@ public class ExternalTaskWorkerConfig {
     
     @Value("${camunda.bpm.client.worker-id:regulatory-worker}")
     private String workerId;
-
+    
     // Credentials the client uses to authenticate against the (now protected) engine
     // REST API. Default to the engine admin user so a single secret governs both the
     // Cockpit login and worker access.
     @Value("${camunda.bpm.admin-user.id:admin}")
     private String engineAuthUsername;
-
+    
     @Value("${camunda.bpm.admin-user.password:admin}")
     private String engineAuthPassword;
-
+    
     @Bean
     public ExternalTaskClient externalTaskClient() {
         log.info("Initializing External Task Client with base URL: {}", camundaBaseUrl);
-
+        
         return ExternalTaskClient.create()
                    .baseUrl(camundaBaseUrl)
                    .workerId(workerId)

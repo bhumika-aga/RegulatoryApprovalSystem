@@ -26,22 +26,24 @@ import java.util.List;
 @Getter
 @Setter
 public class AuthUserProperties {
-
-    /** Configured users. Roles here are authoritative; clients cannot request roles. */
+    
+    /**
+     * Configured users. Roles here are authoritative; clients cannot request roles.
+     */
     private List<User> users = new ArrayList<>();
-
+    
     @Getter
     @Setter
     public static class User {
-
+        
         @NotBlank(message = "A configured auth user requires a username")
         private String username;
-
+        
         @NotBlank(message = "A configured auth user requires a password")
         private String password;
-
+        
         private List<String> roles = new ArrayList<>();
-
+        
         private String department;
     }
 }

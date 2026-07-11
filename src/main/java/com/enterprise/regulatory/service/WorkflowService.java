@@ -97,20 +97,20 @@ public class WorkflowService {
         RegulatoryRequest request = requestRepository.findByProcessInstanceId(processInstanceId)
                                         .orElseThrow(() -> new ResourceNotFoundException(
                                             "Workflow not found with processInstanceId: " + processInstanceId));
-
+        
         authorizeRead(request);
         return buildWorkflowResponse(request, null);
     }
-
+    
     @Transactional(readOnly = true)
     public WorkflowResponse getWorkflowById(UUID requestId) {
         RegulatoryRequest request = requestRepository.findById(Objects.requireNonNull(requestId))
                                         .orElseThrow(() -> new ResourceNotFoundException("Request not found with ID: " + requestId));
-
+        
         authorizeRead(request);
         return buildWorkflowResponse(request, null);
     }
-
+    
     /**
      * A single request may be read only by its submitter or by a user with an
      * oversight role; otherwise any authenticated user could read any other

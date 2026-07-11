@@ -32,30 +32,30 @@ import java.util.Optional;
 @Slf4j
 @Tag(name = "Authentication", description = "JWT token issuance endpoints")
 public class AuthController {
-
+    
     private final JwtTokenProvider tokenProvider;
     private final JwtProperties jwtProperties;
     private final AuthUserService authUserService;
-
+    
     @PostMapping("/token")
     @Operation(summary = "Obtain a JWT token", description = "Authenticate with username and password to obtain access and refresh tokens")
     public ResponseEntity<ApiResponse<AuthResponse>> generateToken(@Valid @RequestBody AuthRequest request) {
         log.info("Token requested for user: {}", request.getUsername());
-
+        
         Optional<StoredUser> authenticated = authUserService.authenticate(
             request.getUsername(), request.getPassword());
-
+        
         if (authenticated.isEmpty()) {
             log.warn("Failed authentication attempt for user: {}", request.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                        .body(ApiResponse.error("Invalid username or password"));
         }
-
+        
         StoredUser user = authenticated.get();
         return ResponseEntity.ok(ApiResponse.success(
             buildTokens(user), "Token generated successfully"));
     }
-
+    
     @PostMapping("/refresh")
     @Operation(summary = "Refresh JWT token", description = "Exchange a valid refresh token for a new access + refresh token pair")
     public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
@@ -64,9 +64,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                        .body(ApiResponse.error("Invalid or expired refresh token"));
         }
-
+        
         String username = tokenProvider.getUsernameFromToken(refreshToken);
-
+        
         // Re-derive roles and department from the current user store rather than from
         // the refresh token, so privileges reflect the user's present configuration.
         Optional<StoredUser> user = authUserService.findByUsername(username);
@@ -75,16 +75,16 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                        .body(ApiResponse.error("User no longer exists"));
         }
-
+        
         return ResponseEntity.ok(ApiResponse.success(
             buildTokens(user.get()), "Token refreshed successfully"));
     }
-
+    
     private AuthResponse buildTokens(StoredUser user) {
         String accessToken = tokenProvider.generateToken(
             user.getUsername(), user.getRoles(), user.getDepartment());
         String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
-
+        
         return AuthResponse.builder()
                    .accessToken(accessToken)
                    .refreshToken(refreshToken)
