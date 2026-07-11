@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Maven dependencies (Spring Boot, Camunda, JJWT, springdoc, ...)
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    groups:
+      # Batch Spring updates into a single PR to reduce noise.
+      spring:
+        patterns:
+          - "org.springframework*"
+          - "org.springframework.boot*"
+      camunda:
+        patterns:
+          - "org.camunda*"
+
+  # GitHub Actions used by the workflows in this repo.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - ci
+
+  # The base images in the multi-stage Dockerfile.
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - docker
