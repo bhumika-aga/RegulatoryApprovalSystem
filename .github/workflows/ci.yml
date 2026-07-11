@@ -55,12 +55,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # Validates the multi-stage Dockerfile still builds (Render deploys from it).
-      # Image is built but not pushed.
+      # Image is built but not pushed. No GHA cache export here — for a throwaway
+      # validation image it isn't worth it, and the cache-export teardown step can
+      # hang and stall the job.
       - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
           tags: regulatory-approval-system:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
