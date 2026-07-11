@@ -14,7 +14,7 @@ import java.util.Set;
  */
 @Component
 public class SecurityUtils {
-
+    
     /**
      * Roles with cross-request visibility: they may read workflows and tasks they
      * neither submitted nor are assigned to. These mirror the roles already granted
@@ -55,7 +55,7 @@ public class SecurityUtils {
     public Optional<String> getCurrentUserDepartment() {
         return getCurrentUser().map(UserPrincipal::getDepartment);
     }
-
+    
     /**
      * Gets the current user's roles (e.g. {@code REVIEWER}), or an empty set if
      * unauthenticated. Role names match the BPMN candidate-group names.
@@ -63,13 +63,15 @@ public class SecurityUtils {
     public Set<String> getCurrentUserRoles() {
         return getCurrentUser().map(UserPrincipal::getRoles).orElseGet(Collections::emptySet);
     }
-
-    /** Whether the current user holds at least one of the given roles. */
+    
+    /**
+     * Whether the current user holds at least one of the given roles.
+     */
     public boolean currentUserHasAnyRole(Collection<String> roles) {
         Set<String> mine = getCurrentUserRoles();
         return roles.stream().anyMatch(mine::contains);
     }
-
+    
     /**
      * Whether the current user has an oversight role and may therefore read
      * workflows/tasks they did not submit and are not assigned to.

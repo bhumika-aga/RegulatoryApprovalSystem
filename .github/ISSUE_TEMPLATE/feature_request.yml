@@ -1,6 +1,6 @@
 name: Feature request
 description: Suggest an enhancement to the Regulatory Approval System
-labels: [enhancement]
+labels: [ enhancement ]
 body:
   - type: textarea
     id: problem
