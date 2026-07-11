@@ -1,5 +1,6 @@
 # Regulatory Approval System
 
+[![CI](https://github.com/bhumika-aga/RegulatoryApprovalSystem/actions/workflows/ci.yml/badge.svg)](https://github.com/bhumika-aga/RegulatoryApprovalSystem/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.15-green.svg)](https://spring.io/projects/spring-boot)
 [![Camunda](https://img.shields.io/badge/Camunda-7.24.0-blue.svg)](https://camunda.com/)
@@ -210,6 +211,18 @@ process-instance id, request id and task id into collection variables automatica
 without manual copy/paste. Each key request ships with a saved example response captured from a live run.
 
 Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
+
+### Automated tests
+
+`mvn verify` runs the test suite:
+
+- **`AuthUserServiceTest`** — unit tests for credential verification (BCrypt match, unknown user, case-insensitive lookup).
+- **`SecurityAuthorizationIntegrationTest`** — full-stack tests over real HTTP covering the auth matrix (400/401/200,
+  refresh preserving roles, server-controlled roles), **task-level authorization** (a role can only complete tasks its
+  candidate group owns), and **read scoping** (a user cannot read another user's workflow/tasks unless they hold an
+  oversight role).
+
+Every push and pull request runs these via GitHub Actions (`.github/workflows/ci.yml`).
 
 ---
 

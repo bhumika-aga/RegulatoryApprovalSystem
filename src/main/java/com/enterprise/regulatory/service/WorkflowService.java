@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.runtime.ProcessInstance;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,16 +97,33 @@ public class WorkflowService {
         RegulatoryRequest request = requestRepository.findByProcessInstanceId(processInstanceId)
                                         .orElseThrow(() -> new ResourceNotFoundException(
                                             "Workflow not found with processInstanceId: " + processInstanceId));
-        
+
+        authorizeRead(request);
         return buildWorkflowResponse(request, null);
     }
-    
+
     @Transactional(readOnly = true)
     public WorkflowResponse getWorkflowById(UUID requestId) {
         RegulatoryRequest request = requestRepository.findById(Objects.requireNonNull(requestId))
                                         .orElseThrow(() -> new ResourceNotFoundException("Request not found with ID: " + requestId));
-        
+
+        authorizeRead(request);
         return buildWorkflowResponse(request, null);
+    }
+
+    /**
+     * A single request may be read only by its submitter or by a user with an
+     * oversight role; otherwise any authenticated user could read any other
+     * department's regulatory submission by id.
+     */
+    private void authorizeRead(RegulatoryRequest request) {
+        String username = securityUtils.getCurrentUsername();
+        if (securityUtils.currentUserHasOversight() || username.equals(request.getSubmitterId())) {
+            return;
+        }
+        log.warn("User {} denied read access to request {} submitted by {}",
+            username, request.getId(), request.getSubmitterId());
+        throw new AccessDeniedException("You are not permitted to view this request");
     }
     
     @Transactional(readOnly = true)
