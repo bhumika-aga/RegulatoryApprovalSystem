@@ -86,7 +86,14 @@ available. On exhausting retries each worker applies a fallback suited to how cr
 ### 4. Security model
 
 Authentication is **stateless JWT** (HS512). A token carries the subject (username), a `roles` claim and a `department`
-claim — issued by `POST /api/v1/auth/token` (a stand-in for an external IdP in production).
+claim — issued by `POST /api/v1/auth/token` after verifying a **username + password** against a configured user store
+(`app.security.auth.users`; passwords are BCrypt-hashed at startup). **Roles and department come from that store, not
+from the request**, so a caller cannot grant itself privileges. This store is a self-contained stand-in for an external
+IdP in production. `POST /api/v1/auth/refresh` re-derives the current roles/department from the store rather than trusting
+the refresh token.
+
+Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridable individually via
+`AUTH_<ROLE>_PASSWORD`): `admin`, `reviewer`, `manager`, `senior.manager`, `compliance`, `auditor`.
 
 - `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and synchronises the
   authenticated user id into Camunda's `IdentityService` so the engine can resolve candidate-group task assignment.
@@ -173,7 +180,7 @@ Base path: `/api/v1`. All endpoints except auth, health and the API docs require
 
 | Method & Path                               | Role(s)                        | Description                         |
 |:--------------------------------------------|:-------------------------------|:------------------------------------|
-| `POST /auth/token`                          | public                         | Issue access + refresh tokens       |
+| `POST /auth/token`                          | public (username + password)   | Authenticate → access + refresh tokens |
 | `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                       |
 | `GET  /health`                              | public                         | Health probe                        |
 | `POST /workflow/start`                      | REVIEWER, MANAGER, ADMIN       | Start an approval workflow          |
@@ -229,6 +236,7 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
 ```bash
 export JWT_SECRET=$(openssl rand -base64 64)   # Base64, decodes to ≥ 64 bytes for HS512
 export CAMUNDA_ADMIN_PASSWORD=admin
+export AUTH_DEFAULT_PASSWORD='ChangeMe123!'    # password for the seeded API users (admin, reviewer, manager, ...)
 ```
 
 ### Run locally

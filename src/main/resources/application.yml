@@ -77,6 +77,35 @@ app:
       expiration-ms: 86400000 # 24 hours
       refresh-expiration-ms: 604800000 # 7 days
       issuer: regulatory-approval-system
+    # Users allowed to obtain a token. Roles here are authoritative — the client
+    # cannot request roles. Passwords are hashed at startup; override them via env
+    # (a single AUTH_DEFAULT_PASSWORD by default, or per-user vars) in any real deployment.
+    auth:
+      users:
+        - username: admin
+          password: ${AUTH_ADMIN_PASSWORD:${AUTH_DEFAULT_PASSWORD:ChangeMe123!}}
+          roles: [ ADMIN ]
+          department: IT
+        - username: reviewer
+          password: ${AUTH_REVIEWER_PASSWORD:${AUTH_DEFAULT_PASSWORD:ChangeMe123!}}
+          roles: [ REVIEWER ]
+          department: OPERATIONS
+        - username: manager
+          password: ${AUTH_MANAGER_PASSWORD:${AUTH_DEFAULT_PASSWORD:ChangeMe123!}}
+          roles: [ MANAGER ]
+          department: OPERATIONS
+        - username: senior.manager
+          password: ${AUTH_SENIOR_MANAGER_PASSWORD:${AUTH_DEFAULT_PASSWORD:ChangeMe123!}}
+          roles: [ SENIOR_MANAGER ]
+          department: OPERATIONS
+        - username: compliance
+          password: ${AUTH_COMPLIANCE_PASSWORD:${AUTH_DEFAULT_PASSWORD:ChangeMe123!}}
+          roles: [ COMPLIANCE ]
+          department: COMPLIANCE
+        - username: auditor
+          password: ${AUTH_AUDITOR_PASSWORD:${AUTH_DEFAULT_PASSWORD:ChangeMe123!}}
+          roles: [ AUDITOR ]
+          department: AUDIT
   notification:
     email:
       enabled: false

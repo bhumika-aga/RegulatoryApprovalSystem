@@ -19,6 +19,10 @@
       "value": ""
     },
     {
+      "key": "authPassword",
+      "value": "ChangeMe123!"
+    },
+    {
       "key": "managerToken",
       "value": ""
     },
@@ -85,7 +89,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"alice.reviewer\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"REVIEWER\"]\n}"
+              "raw": "{\n  \"username\": \"reviewer\",\n  \"password\": \"{{authPassword}}\"\n}"
             }
           },
           "response": [
@@ -113,7 +117,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"username\": \"alice.reviewer\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"REVIEWER\"]\n}"
+                  "raw": "{\n  \"username\": \"reviewer\",\n  \"password\": \"{{authPassword}}\"\n}"
                 }
               },
               "status": "OK",
@@ -124,7 +128,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Token generated successfully\",\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzUxMiJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzUxMiJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 86400,\n    \"username\": \"alice.reviewer\",\n    \"roles\": [\"REVIEWER\"],\n    \"department\": \"OPERATIONS\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:05.054817\"\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Token generated successfully\",\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzUxMiJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzUxMiJ9...\",\n    \"tokenType\": \"Bearer\",\n    \"expiresIn\": 86400,\n    \"username\": \"reviewer\",\n    \"roles\": [\"REVIEWER\"],\n    \"department\": \"OPERATIONS\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:05.054817\"\n}"
             }
           ]
         },
@@ -163,7 +167,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"bob.manager\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"MANAGER\"]\n}"
+              "raw": "{\n  \"username\": \"manager\",\n  \"password\": \"{{authPassword}}\"\n}"
             }
           },
           "response": []
@@ -203,7 +207,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"carol.admin\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"ADMIN\"]\n}"
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"{{authPassword}}\"\n}"
             }
           },
           "response": []
@@ -243,7 +247,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"dan.auditor\",\n  \"department\": \"OPERATIONS\",\n  \"roles\": [\"AUDITOR\"]\n}"
+              "raw": "{\n  \"username\": \"auditor\",\n  \"password\": \"{{authPassword}}\"\n}"
             }
           },
           "response": []
@@ -363,7 +367,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Workflow started successfully\",\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"IN_REVIEW\",\n    \"currentStage\": \"INITIAL_REVIEW\",\n    \"submitterId\": \"alice.reviewer\",\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.065511\",\n    \"message\": \"Workflow started successfully\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:05.07\"\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Workflow started successfully\",\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"IN_REVIEW\",\n    \"currentStage\": \"INITIAL_REVIEW\",\n    \"submitterId\": \"reviewer\",\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.065511\",\n    \"message\": \"Workflow started successfully\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:05.07\"\n}"
             }
           ]
         },
@@ -424,7 +428,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"APPROVED\",\n    \"currentStage\": \"COMPLETED\",\n    \"submitterId\": \"alice.reviewer\",\n    \"riskScore\": 55,\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.252239\",\n    \"completedAt\": \"2026-06-15T17:42:05.251829\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:06.10\"\n}"
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"APPROVED\",\n    \"currentStage\": \"COMPLETED\",\n    \"submitterId\": \"reviewer\",\n    \"riskScore\": 55,\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.252239\",\n    \"completedAt\": \"2026-06-15T17:42:05.251829\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:06.10\"\n}"
             }
           ]
         },
@@ -489,7 +493,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/workflow/user/alice.reviewer",
+              "raw": "{{baseUrl}}/api/v1/workflow/user/reviewer",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -498,7 +502,7 @@
                 "v1",
                 "workflow",
                 "user",
-                "alice.reviewer"
+                "reviewer"
               ]
             }
           },
@@ -1177,7 +1181,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/audit/user/alice.reviewer",
+              "raw": "{{baseUrl}}/api/v1/audit/user/reviewer",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1186,7 +1190,7 @@
                 "v1",
                 "audit",
                 "user",
-                "alice.reviewer"
+                "reviewer"
               ]
             }
           },
