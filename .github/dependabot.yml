@@ -9,6 +9,20 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    # Major-version bumps of the framework anchors require a coordinated migration
+    # and cannot be applied piecemeal: Camunda 7 depends on Spring Boot 3 / Spring 6,
+    # and springdoc 3.x / Spring Boot 4 pull in incompatible autoconfigure modules.
+    # Ignore majors for these so Dependabot stops opening un-mergeable PRs (minor and
+    # patch updates still come through). Revisit if/when the project moves to Camunda 8.
+    ignore:
+      - dependency-name: "org.springframework.boot:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.springframework:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.springdoc:*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.camunda.bpm*:*"
+        update-types: ["version-update:semver-major"]
     groups:
       # Batch Spring updates into a single PR to reduce noise.
       spring:
