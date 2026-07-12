@@ -59,7 +59,7 @@ jobs:
       # validation image it isn't worth it, and the cache-export teardown step can
       # hang and stall the job.
       - name: Build image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
