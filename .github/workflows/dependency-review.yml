@@ -23,7 +23,7 @@ jobs:
       # on; once enabled it reviews pull requests normally.
       - name: Review dependencies
         continue-on-error: true
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
