@@ -16,13 +16,13 @@ updates:
     # patch updates still come through). Revisit if/when the project moves to Camunda 8.
     ignore:
       - dependency-name: "org.springframework.boot:*"
-        update-types: ["version-update:semver-major"]
+        update-types: [ "version-update:semver-major" ]
       - dependency-name: "org.springframework:*"
-        update-types: ["version-update:semver-major"]
+        update-types: [ "version-update:semver-major" ]
       - dependency-name: "org.springdoc:*"
-        update-types: ["version-update:semver-major"]
+        update-types: [ "version-update:semver-major" ]
       - dependency-name: "org.camunda.bpm*:*"
-        update-types: ["version-update:semver-major"]
+        update-types: [ "version-update:semver-major" ]
     groups:
       # Batch Spring updates into a single PR to reduce noise.
       spring:
@@ -57,4 +57,4 @@ updates:
     # 21 -> 25); patch/minor updates of the 21 tags still come through.
     ignore:
       - dependency-name: "eclipse-temurin"
-        update-types: ["version-update:semver-major"]
+        update-types: [ "version-update:semver-major" ]
