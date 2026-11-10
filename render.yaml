@@ -21,6 +21,10 @@ services:
       # The app refuses to start without it.
       - key: AUTH_DEFAULT_PASSWORD
         sync: false
+      # Render is fronted by Cloudflare, which puts the real client address in this
+      # header; login rate limiting counts failed logins per that address.
+      - key: CLIENT_IP_HEADER
+        value: "CF-Connecting-IP"
       # Optional: CORS allowed origins (comma-separated)
       - key: APP_CORS_ALLOWED_ORIGINS
         value: "https://regulatory-approval-system.onrender.com"

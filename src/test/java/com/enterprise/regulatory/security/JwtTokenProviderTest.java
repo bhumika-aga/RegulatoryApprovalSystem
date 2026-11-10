@@ -1,5 +1,6 @@
 package com.enterprise.regulatory.security;
 
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.Test;
 
 import java.util.Base64;
@@ -41,8 +42,29 @@ class JwtTokenProviderTest {
         JwtTokenProvider provider = new JwtTokenProvider(propertiesWithKeyOf(64));
         String token = provider.generateToken("alice", List.of("REVIEWER"), "OPERATIONS");
         
-        assertThat(provider.validateToken(token)).isTrue();
-        assertThat(provider.getUsernameFromToken(token)).isEqualTo("alice");
-        assertThat(provider.getRolesFromToken(token)).containsExactly("REVIEWER");
+        Claims claims = provider.parseAccessToken(token).orElseThrow();
+        assertThat(claims.getSubject()).isEqualTo("alice");
+        assertThat(JwtTokenProvider.rolesOf(claims)).containsExactly("REVIEWER");
+        assertThat(JwtTokenProvider.departmentOf(claims)).isEqualTo("OPERATIONS");
+    }
+    
+    @Test
+    void accessAndRefreshTokensCannotStandInForEachOther() {
+        JwtTokenProvider provider = new JwtTokenProvider(propertiesWithKeyOf(64));
+        String access = provider.generateToken("alice", List.of("REVIEWER"), "OPERATIONS");
+        String refresh = provider.generateRefreshToken("alice");
+        
+        assertThat(provider.parseRefreshToken(refresh)).isPresent();
+        assertThat(provider.parseRefreshToken(access)).isEmpty();
+        assertThat(provider.parseAccessToken(refresh)).isEmpty();
+    }
+    
+    @Test
+    void rejectsTokensSignedWithAnotherKey() {
+        JwtProperties otherKey = new JwtProperties();
+        otherKey.setSecretKey(Base64.getEncoder().encodeToString(new byte[64]).replace('A', 'B'));
+        String foreign = new JwtTokenProvider(otherKey).generateToken("alice", List.of("ADMIN"), "IT");
+        
+        assertThat(new JwtTokenProvider(propertiesWithKeyOf(64)).parseAccessToken(foreign)).isEmpty();
     }
 }

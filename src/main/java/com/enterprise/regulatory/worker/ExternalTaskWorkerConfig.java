@@ -3,7 +3,6 @@ package com.enterprise.regulatory.worker;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.client.ExternalTaskClient;
 import org.camunda.bpm.client.backoff.ExponentialBackoffStrategy;
-import org.camunda.bpm.client.interceptor.auth.BasicAuthProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +10,10 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Configuration for Camunda External Task Client.
  * Manages the connection to Camunda engine for external task workers.
+ *
+ * <p>The client calls the engine REST API over {@code localhost} without credentials: that
+ * API is reachable from this host only (see {@code CamundaSecurityConfig}), and not logging
+ * in means Camunda's failed-login lockout can never stall the workers.
  */
 @Configuration
 @Slf4j
@@ -31,15 +34,6 @@ public class ExternalTaskWorkerConfig {
     @Value("${camunda.bpm.client.worker-id:regulatory-worker}")
     private String workerId;
     
-    // Credentials the client uses to authenticate against the protected engine REST API:
-    // the engine admin user, so a single secret governs both the Cockpit login and worker
-    // access. The password has no fallback; it must come from CAMUNDA_ADMIN_PASSWORD.
-    @Value("${camunda.bpm.admin-user.id:admin}")
-    private String engineAuthUsername;
-    
-    @Value("${camunda.bpm.admin-user.password}")
-    private String engineAuthPassword;
-    
     @Bean
     public ExternalTaskClient externalTaskClient() {
         log.info("Initializing External Task Client with base URL: {}", camundaBaseUrl);
@@ -51,7 +45,6 @@ public class ExternalTaskWorkerConfig {
                    .lockDuration(lockDuration)
                    .maxTasks(maxTasks)
                    .backoffStrategy(new ExponentialBackoffStrategy(500, 2, 10000))
-                   .addInterceptor(new BasicAuthProvider(engineAuthUsername, engineAuthPassword))
                    .disableAutoFetching()
                    .build();
     }

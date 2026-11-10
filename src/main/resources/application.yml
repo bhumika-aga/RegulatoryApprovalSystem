@@ -2,6 +2,9 @@ server:
   port: 8080
   servlet:
     context-path: /
+  # Behind a reverse proxy (e.g. Render's), take the scheme and client address from the
+  # proxy's X-Forwarded-* headers; Tomcat trusts them only from private/loopback addresses.
+  forward-headers-strategy: native
 
 spring:
   application:
@@ -42,12 +45,10 @@ camunda:
   bpm:
     admin-user:
       id: admin
-      # Required, no default: guards the Camunda webapp and the engine REST API.
+      # Required, no default: the Camunda webapp (Cockpit) login.
       password: ${CAMUNDA_ADMIN_PASSWORD}
       firstName: Admin
       lastName: User
-    filter:
-      create: All Tasks
     authorization:
       enabled: false
     database:
@@ -61,6 +62,15 @@ camunda:
       enabled: true
     webapp:
       application-path: /camunda
+    generic-properties:
+      properties:
+        # Camunda locks a user after failed logins: for growing delays (3 s, 6 s, ... up to
+        # 60 s), then permanently after login-max-attempts (default 10). That lets anyone keep
+        # admin, the only Cockpit user, out of Cockpit by sending wrong passwords for it, so
+        # the lock is off (no permanent lock, zero delay). Instead, failed webapp logins are
+        # rate-limited per client address, like API logins (WebappLoginRateLimitFilter).
+        login-max-attempts: 2147483647
+        login-delay-max-time: 0
     client:
       base-url: http://localhost:${server.port}/engine-rest
       async-response-timeout: 30000
@@ -83,6 +93,11 @@ app:
       expiration-ms: 86400000 # 24 hours
       refresh-expiration-ms: 604800000 # 7 days
       issuer: regulatory-approval-system
+    # Login rate limiting (API and Camunda webapp) counts failures per client address.
+    # Behind an edge proxy that many clients share (Render is fronted by Cloudflare), name
+    # the header that carries the real client address, e.g. CF-Connecting-IP; leave blank
+    # when clients connect directly, since a client could otherwise forge the header.
+    client-ip-header: ${CLIENT_IP_HEADER:}
     # Users allowed to obtain a token. Roles here are authoritative — the client
     # cannot request roles. Passwords are hashed at startup and come from the
     # environment: a per-user AUTH_<USER>_PASSWORD, else AUTH_DEFAULT_PASSWORD (required).
@@ -119,10 +134,14 @@ app:
       enabled: false
 
 # OpenAPI Documentation
+# Off unless API_DOCS_ENABLED=true (or the dev profile), so a deployment does not
+# publish its API description.
 springdoc:
   api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha

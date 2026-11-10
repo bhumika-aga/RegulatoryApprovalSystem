@@ -91,14 +91,18 @@ claim — issued by `POST /api/v1/auth/token` after verifying a **username + pas
 (`app.security.auth.users`; passwords are BCrypt-hashed at startup). **Roles and department come from that store, not
 from the request**, so a caller cannot grant itself privileges. This store is a self-contained stand-in for an external
 IdP in production. `POST /api/v1/auth/refresh` re-derives the current roles/department from the store rather than
-trusting
-the refresh token.
+trusting the refresh token. Access and refresh tokens are typed: the refresh endpoint accepts only a refresh token, and
+API calls only an access token.
+
+Failed logins — to the API and to the Camunda webapp — are rate-limited per client address: after 10 failures within
+15 minutes, further login attempts from that address get **429** with `Retry-After` until the window ends. (Counting per address rather than per username means nobody can
+lock a user out by guessing their password. Behind a shared edge proxy, set `CLIENT_IP_HEADER`; see _Deployment_.)
 
 Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridable individually via
 `AUTH_<ROLE>_PASSWORD`): `admin`, `reviewer`, `manager`, `senior.manager`, `compliance`, `auditor`.
 
-- `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and synchronizes the
-  authenticated user id into Camunda's `IdentityService` so the engine can resolve candidate-group task assignment.
+- `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and makes the user and their
+  roles (as groups) Camunda's identity for the duration of the request, clearing it afterwards.
 - URL- and method-level authorization (`@PreAuthorize`) enforce role access; claiming or completing a task also requires
   the caller's role to be one of the task's candidate groups (or the task to be assigned to them).
 - **Separation of duties** — nobody may claim or complete a review/approval task on a request they submitted, whatever
@@ -117,8 +121,13 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 - `/actuator/health` is anonymous (platform health check); all other actuator endpoints require authentication, and
   health details are shown only to authenticated callers.
 - The Camunda webapp (`/camunda/**`) is protected by Camunda's own login — only the configured `admin` user exists.
-- The raw engine REST API (`/engine-rest/**`), used only by the external task workers, is guarded by Camunda's
-  `ProcessEngineAuthenticationFilter` (HTTP Basic); the worker client authenticates with the admin credentials.
+  Tasklist and the webapp's task-completion endpoints are closed, so tasks are completed only through the API, with its
+  role and separation-of-duties checks. Camunda's own lock on a user after failed logins is off — it let anyone keep
+  `admin` out of Cockpit — and the webapp login is rate-limited per client address instead.
+- The raw engine REST API (`/engine-rest/**`) is used only by the in-process external task workers, over `localhost`, and
+  is refused (**403**) to any other host or to proxied requests. The workers do not log in, so failed logins against
+  `admin` cannot stall them.
+- Swagger UI and the OpenAPI description are off unless `API_DOCS_ENABLED=true` (on in the `dev` profile).
 - The H2 console is disabled outside the `dev` profile.
 
 | Role             | Capabilities                                            |
@@ -241,7 +250,8 @@ python3 scripts/smoke_test.py --base-url http://localhost:8080 \
 
 Both create workflows, so run them against a local or test instance, not one holding real data.
 
-Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
+Interactive docs are also available via Swagger UI at `/swagger-ui.html` when API docs are enabled (`dev` profile or
+`API_DOCS_ENABLED=true`).
 
 ### Automated tests
 
@@ -249,8 +259,12 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
 
 - **`AuthUserServiceTest`** — unit tests for credential verification (BCrypt match, unknown user, case-insensitive
   lookup).
+- **`JwtTokenProviderTest`**, **`JwtAuthenticationFilterTest`**, **`LoginAttemptLimiterTest`**,
+  **`ClientAddressResolverTest`**, **`LocalOnlyFilterTest`** — key validation and token types, clearing the Camunda
+  identity after each request, login rate limiting and client addresses, and the engine REST API's local-only access.
 - **`SecurityAuthorizationIntegrationTest`** — full-stack tests over real HTTP covering the auth matrix (400/401/200,
-  refresh preserving roles, server-controlled roles), **task-level authorization** (a role can only complete tasks its
+  refresh preserving roles, server-controlled roles, token types, API and Cockpit login rate limiting), the exposed surface (engine REST API, Tasklist, API
+docs), **task-level authorization** (a role can only complete tasks its
   candidate group owns), and **read scoping** (a user cannot read another user's workflow/tasks unless they hold an
   oversight role).
 
@@ -282,7 +296,7 @@ All three are **required** — there are no built-in defaults, and the applicati
 
 ```bash
 export JWT_SECRET=$(openssl rand -base64 64)        # Base64, must decode to ≥ 64 bytes for HS512
-export CAMUNDA_ADMIN_PASSWORD='choose-a-password'   # Camunda webapp login + worker access to the engine REST API
+export CAMUNDA_ADMIN_PASSWORD='choose-a-password'   # Camunda webapp (Cockpit) login
 export AUTH_DEFAULT_PASSWORD='choose-a-password'    # password for the seeded API users (admin, reviewer, manager, ...)
 ```
 
@@ -298,7 +312,7 @@ java -jar target/regulatory-approval-system-1.0.0.jar   # with the variables abo
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
+- **Swagger UI**: `http://localhost:8080/swagger-ui.html` — `dev` profile (or `API_DOCS_ENABLED=true`) only
 - **Camunda Webapp**: `http://localhost:8080/camunda` (login `admin` / `${CAMUNDA_ADMIN_PASSWORD}`)
 - **H2 Console**: `http://localhost:8080/h2-console` — **`dev` profile only** (JDBC `jdbc:h2:mem:regulatory_db`, user
   `sa`).
@@ -321,3 +335,8 @@ The project is also pre-configured for **Render** via `render.yaml` — deploy i
 `JWT_SECRET`, `CAMUNDA_ADMIN_PASSWORD` and `AUTH_DEFAULT_PASSWORD` secrets in the dashboard. For an existing service,
 add any of these that are missing under **Environment** before deploying: Render only prompts for them when a
 Blueprint is first created, and the application will not start without them.
+
+Render is fronted by Cloudflare, so every request reaches the app from a shared proxy. `render.yaml` therefore sets
+`CLIENT_IP_HEADER=CF-Connecting-IP`, the header in which Cloudflare passes the real client address, so failed logins are
+counted per client rather than per proxy. (If the service was not created from the Blueprint, add it under
+**Environment**.) Leave it unset anywhere clients connect directly, as they could then forge the header.

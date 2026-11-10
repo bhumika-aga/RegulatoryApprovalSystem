@@ -63,16 +63,25 @@ public class SecurityConfig {
                     // all other actuator endpoints (metrics, info, ...) require authentication.
                     .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                     .requestMatchers("/actuator/**").authenticated()
+                    // API docs: served only when enabled (API_DOCS_ENABLED or the dev profile).
                     .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                         "/v3/api-docs/**")
                     .permitAll()
                     
+                    // Tasks are completed through the API only, where role checks and
+                    // separation of duties apply: the Tasklist app and the webapp's
+                    // task-completion endpoints are closed, even to the Camunda admin.
+                    .requestMatchers("/camunda/app/tasklist/**", "/camunda/api/tasklist/**").denyAll()
+                    .requestMatchers(HttpMethod.POST,
+                        "/camunda/api/engine/engine/*/task/*/complete",
+                        "/camunda/api/engine/engine/*/task/*/submit-form",
+                        "/camunda/api/engine/engine/*/task/*/resolve").denyAll()
                     // Camunda webapp - guarded by Camunda's own login page (only the
                     // configured admin user exists), so Spring delegates auth to it.
                     .requestMatchers("/camunda/**").permitAll()
                     .requestMatchers("/camunda-welcome/**").permitAll()
-                    // Engine REST API - guarded by Camunda's ProcessEngineAuthenticationFilter
-                    // (HTTP Basic, see CamundaSecurityConfig). No longer anonymously public.
+                    // Engine REST API - for the in-process workers only; LocalOnlyFilter
+                    // refuses requests from other hosts (see CamundaSecurityConfig).
                     .requestMatchers("/engine-rest/**").permitAll();
                 
                 // H2 Console - only reachable when explicitly exposed (dev profile).

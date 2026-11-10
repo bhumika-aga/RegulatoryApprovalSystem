@@ -2,13 +2,20 @@
 #
 # Activate with:  SPRING_PROFILES_ACTIVE=dev  (or `mvn spring-boot:run -Dspring-boot.run.profiles=dev`)
 #
-# This profile relaxes a couple of production hardening defaults for local
+# This profile relaxes a few production hardening defaults for local
 # debugging ONLY. It must never be activated in production (e.g. on Render).
 spring:
   # Re-enable the H2 web console at /h2-console for local inspection.
   h2:
     console:
       enabled: true
+
+# Serve the OpenAPI description and Swagger UI.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
 
 app:
   security:

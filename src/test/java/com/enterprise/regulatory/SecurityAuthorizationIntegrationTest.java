@@ -2,12 +2,15 @@ package com.enterprise.regulatory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 
 import java.util.Map;
 
@@ -23,11 +26,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT, properties = {
     "JWT_SECRET=" + SecurityAuthorizationIntegrationTest.TEST_JWT_SECRET,
-    "CAMUNDA_ADMIN_PASSWORD=test-camunda-admin-password",
-    "AUTH_DEFAULT_PASSWORD=" + SecurityAuthorizationIntegrationTest.PASSWORD})
+    "CAMUNDA_ADMIN_PASSWORD=" + SecurityAuthorizationIntegrationTest.CAMUNDA_PASSWORD,
+    "AUTH_DEFAULT_PASSWORD=" + SecurityAuthorizationIntegrationTest.PASSWORD,
+    // Lets rate-limiting tests act as distinct clients without blocking the other tests' logins.
+    "CLIENT_IP_HEADER=" + SecurityAuthorizationIntegrationTest.CLIENT_HEADER})
 class SecurityAuthorizationIntegrationTest {
     
     static final String PASSWORD = "Test-Api-Password-1";
+    static final String CAMUNDA_PASSWORD = "test-camunda-admin-password";
+    static final String CLIENT_HEADER = "X-Test-Client-Address";
     /**
      * 64 random bytes, Base64-encoded; used only by this test.
      */
@@ -37,8 +44,13 @@ class SecurityAuthorizationIntegrationTest {
     @LocalServerPort
     private int port;
     
-    @Autowired
-    private TestRestTemplate rest;
+    /**
+     * No automatic retries or cookie handling: HttpClient would otherwise wait out a 429's
+     * {@code Retry-After} (15 minutes) and retry, and the tests manage cookies themselves.
+     */
+    private final TestRestTemplate rest = new TestRestTemplate(new RestTemplateBuilder()
+        .requestFactory(() -> new HttpComponentsClientHttpRequestFactory(
+            HttpClients.custom().disableAutomaticRetries().disableCookieManagement().build())));
     
     @Autowired
     private ObjectMapper mapper;
@@ -88,6 +100,77 @@ class SecurityAuthorizationIntegrationTest {
         
         assertThat(res.getStatusCode().value()).isEqualTo(200);
         assertThat(roles(json(res).at("/data/roles"))).containsExactly("REVIEWER");
+    }
+    
+    @Test
+    void refreshRefusesAnAccessToken() {
+        String accessToken = login("reviewer");
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Refresh-Token", accessToken);
+        ResponseEntity<String> res = rest.exchange(url("/api/v1/auth/refresh"),
+            HttpMethod.POST, new HttpEntity<>(headers), String.class);
+        assertThat(res.getStatusCode().value()).isEqualTo(401);
+    }
+    
+    @Test
+    void refreshTokenIsNotAnAccessToken() {
+        String refreshToken = json(call(HttpMethod.POST, "/api/v1/auth/token", null,
+            Map.of("username", "admin", "password", PASSWORD))).at("/data/refreshToken").asText();
+        assertThat(call(HttpMethod.GET, "/api/v1/tasks", refreshToken, null).getStatusCode().value())
+            .isEqualTo(401);
+    }
+    
+    @Test
+    void apiLoginIsRateLimitedPerClientAddress() {
+        for (int i = 0; i < 10; i++) {
+            assertThat(apiLoginFrom("203.0.113.10", "wrong").getStatusCode().value()).isEqualTo(401);
+        }
+        ResponseEntity<String> blocked = apiLoginFrom("203.0.113.10", PASSWORD);
+        assertThat(blocked.getStatusCode().value()).isEqualTo(429);
+        assertThat(blocked.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        // Other clients, and so the user, are unaffected.
+        assertThat(apiLoginFrom("203.0.113.11", PASSWORD).getStatusCode().value()).isEqualTo(200);
+    }
+    
+    @Test
+    void cockpitLoginIsRateLimitedPerClientAndNeverLocksAdmin() {
+        for (int i = 0; i < 10; i++) {
+            assertThat(cockpitLoginFrom("203.0.113.20", "wrong").getStatusCode().value()).isEqualTo(401);
+        }
+        assertThat(cockpitLoginFrom("203.0.113.20", CAMUNDA_PASSWORD).getStatusCode().value()).isEqualTo(429);
+        // Camunda's own lock is off: after 10 failed attempts admin can still log in at once.
+        assertThat(cockpitLoginFrom("203.0.113.21", CAMUNDA_PASSWORD).getStatusCode().value()).isEqualTo(200);
+    }
+    
+    // ---------------------------------------------------------------- Exposed surface
+    
+    @Test
+    void engineRestIsOpenToThisHostOnly() {
+        // The in-process workers call it from localhost without credentials ...
+        assertThat(call(HttpMethod.GET, "/engine-rest/process-definition", null, null)
+                       .getStatusCode().value()).isEqualTo(200);
+        // ... while a request relayed by a proxy on behalf of another client is refused.
+        HttpHeaders proxied = new HttpHeaders();
+        proxied.set("X-Forwarded-For", "203.0.113.7");
+        assertThat(rest.exchange(url("/engine-rest/process-definition"), HttpMethod.GET,
+            new HttpEntity<>(proxied), String.class).getStatusCode().value()).isEqualTo(403);
+    }
+    
+    @Test
+    void tasklistIsClosed() {
+        assertThat(call(HttpMethod.GET, "/camunda/app/tasklist/default/", null, null)
+                       .getStatusCode().value()).isIn(401, 403);
+        assertThat(call(HttpMethod.POST, "/camunda/api/engine/engine/default/task/some-id/complete", null, Map.of())
+                       .getStatusCode().value()).isIn(401, 403);
+        // Cockpit itself stays available.
+        assertThat(call(HttpMethod.GET, "/camunda/app/cockpit/default/", null, null)
+                       .getStatusCode().value()).isEqualTo(200);
+    }
+    
+    @Test
+    void apiDocsAreOffByDefault() {
+        assertThat(call(HttpMethod.GET, "/v3/api-docs", null, null).getStatusCode().value()).isEqualTo(404);
+        assertThat(call(HttpMethod.GET, "/swagger-ui.html", null, null).getStatusCode().value()).isEqualTo(404);
     }
     
     // ---------------------------------------------------------------- Task authorization
@@ -272,6 +355,39 @@ class SecurityAuthorizationIntegrationTest {
             });
         }
         return ids;
+    }
+    
+    private ResponseEntity<String> apiLoginFrom(String clientAddress, String password) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(CLIENT_HEADER, clientAddress);
+        return rest.exchange(url("/api/v1/auth/token"), HttpMethod.POST,
+            new HttpEntity<>(Map.of("username", "reviewer", "password", password), headers), String.class);
+    }
+    
+    /**
+     * Logs in to the Camunda webapp as admin, with the session and CSRF token its login requires.
+     */
+    private ResponseEntity<String> cockpitLoginFrom(String clientAddress, String password) {
+        ResponseEntity<String> page = rest.getForEntity(url("/camunda/app/cockpit/default/"), String.class);
+        java.util.List<String> cookies = new java.util.ArrayList<>();
+        String csrfToken = null;
+        for (String setCookie : page.getHeaders().getOrEmpty(HttpHeaders.SET_COOKIE)) {
+            String cookie = setCookie.split(";", 2)[0];
+            cookies.add(cookie);
+            if (cookie.startsWith("XSRF-TOKEN=")) {
+                csrfToken = cookie.substring("XSRF-TOKEN=".length());
+            }
+        }
+        assertThat(csrfToken).as("Camunda CSRF token").isNotNull();
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.set(HttpHeaders.COOKIE, String.join("; ", cookies));
+        headers.set("X-XSRF-TOKEN", csrfToken);
+        headers.set(CLIENT_HEADER, clientAddress);
+        return rest.exchange(url("/camunda/api/admin/auth/user/default/login/cockpit"), HttpMethod.POST,
+            new HttpEntity<>("username=admin&password=" + password, headers), String.class);
     }
     
     private ResponseEntity<String> call(HttpMethod method, String path, String token, Object body) {

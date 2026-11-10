@@ -1,5 +1,6 @@
 package com.enterprise.regulatory.security;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -32,11 +34,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
         try {
             String jwt = getJwtFromRequest(request);
+            Optional<Claims> claims = StringUtils.hasText(jwt) ? tokenProvider.parseAccessToken(jwt) : Optional.empty();
             
-            if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                String username = tokenProvider.getUsernameFromToken(jwt);
-                List<String> roles = tokenProvider.getRolesFromToken(jwt);
-                String department = tokenProvider.getDepartmentFromToken(jwt);
+            if (claims.isPresent()) {
+                String username = claims.get().getSubject();
+                List<String> roles = JwtTokenProvider.rolesOf(claims.get());
+                String department = JwtTokenProvider.departmentOf(claims.get());
                 
                 UserPrincipal userPrincipal = UserPrincipal.create(
                     username,
@@ -53,8 +56,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 
-                // Sync roles to Camunda identity
-                camundaIdentityService.syncUserGroups(username, roles);
+                // Make the user and their roles (as groups) Camunda's current identity
+                camundaIdentityService.setAuthentication(username, roles);
                 
                 log.debug("Authenticated user: {} with roles: {}", username, roles);
             }
@@ -62,7 +65,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.error("Could not set user authentication in security context", ex);
         }
         
-        filterChain.doFilter(request, response);
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            // Camunda's identity is thread-local and servlet threads are pooled: always clear it,
+            // so the next request served by this thread does not run as this user.
+            camundaIdentityService.clearAuthentication();
+        }
     }
     
     private String getJwtFromRequest(HttpServletRequest request) {

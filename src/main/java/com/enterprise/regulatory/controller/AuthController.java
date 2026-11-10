@@ -5,13 +5,18 @@ import com.enterprise.regulatory.dto.response.ApiResponse;
 import com.enterprise.regulatory.dto.response.AuthResponse;
 import com.enterprise.regulatory.security.AuthUserService;
 import com.enterprise.regulatory.security.AuthUserService.StoredUser;
+import com.enterprise.regulatory.security.ClientAddressResolver;
 import com.enterprise.regulatory.security.JwtProperties;
 import com.enterprise.regulatory.security.JwtTokenProvider;
+import com.enterprise.regulatory.security.LoginAttemptLimiter;
+import io.jsonwebtoken.Claims;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,16 +41,30 @@ public class AuthController {
     private final JwtTokenProvider tokenProvider;
     private final JwtProperties jwtProperties;
     private final AuthUserService authUserService;
+    private final LoginAttemptLimiter loginAttemptLimiter;
+    private final ClientAddressResolver clientAddressResolver;
     
     @PostMapping("/token")
     @Operation(summary = "Obtain a JWT token", description = "Authenticate with username and password to obtain access and refresh tokens")
-    public ResponseEntity<ApiResponse<AuthResponse>> generateToken(@Valid @RequestBody AuthRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> generateToken(@Valid @RequestBody AuthRequest request,
+                                                                   HttpServletRequest httpRequest) {
         log.info("Token requested for user: {}", request.getUsername());
+        
+        String client = clientAddressResolver.resolve(httpRequest);
+        long retryAfter = loginAttemptLimiter.retryAfterSeconds(client);
+        if (retryAfter > 0) {
+            log.warn("Login refused for {}: too many failed attempts from this address", client);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                       .header(HttpHeaders.RETRY_AFTER, String.valueOf(retryAfter))
+                       .body(ApiResponse.error("Too many failed login attempts; try again in "
+                                                   + retryAfter + " seconds"));
+        }
         
         Optional<StoredUser> authenticated = authUserService.authenticate(
             request.getUsername(), request.getPassword());
         
         if (authenticated.isEmpty()) {
+            loginAttemptLimiter.recordFailure(client);
             log.warn("Failed authentication attempt for user: {}", request.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                        .body(ApiResponse.error("Invalid username or password"));
@@ -60,12 +79,14 @@ public class AuthController {
     @Operation(summary = "Refresh JWT token", description = "Exchange a valid refresh token for a new access + refresh token pair")
     public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(
         @RequestHeader("X-Refresh-Token") String refreshToken) {
-        if (!tokenProvider.validateToken(refreshToken)) {
+        // Only a refresh token is accepted here; an access token is refused.
+        Optional<Claims> claims = tokenProvider.parseRefreshToken(refreshToken);
+        if (claims.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                        .body(ApiResponse.error("Invalid or expired refresh token"));
         }
         
-        String username = tokenProvider.getUsernameFromToken(refreshToken);
+        String username = claims.get().getSubject();
         
         // Re-derive roles and department from the current user store rather than from
         // the refresh token, so privileges reflect the user's present configuration.
