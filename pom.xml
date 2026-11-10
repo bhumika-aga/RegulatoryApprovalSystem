@@ -21,6 +21,8 @@
 
     <properties>
         <java.version>21</java.version>
+        <!-- Extended by the surefire configuration below (the Mockito agent); empty by default. -->
+        <argLine></argLine>
         <camunda.version>7.24.0</camunda.version>
         <jjwt.version>0.13.0</jjwt.version>
         <springdoc.version>2.10.0</springdoc.version>
@@ -187,6 +189,28 @@
                             <artifactId>lombok</artifactId>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- Exposes each dependency's jar path as a property, e.g. ${org.mockito:mockito-core:jar}. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Load Mockito as a Java agent at JVM start. Attaching it dynamically at runtime is
+                 deprecated (JEP 451) and will be disallowed by default in a future JDK. -Xshare:off
+                 avoids the class-data-sharing warning an agent that extends the boot class path causes. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
                 </configuration>
             </plugin>
         </plugins>

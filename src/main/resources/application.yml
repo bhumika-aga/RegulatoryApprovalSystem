@@ -5,6 +5,11 @@ server:
   # Behind a reverse proxy (e.g. Render's), take the scheme and client address from the
   # proxy's X-Forwarded-* headers; Tomcat trusts them only from private/loopback addresses.
   forward-headers-strategy: native
+  tomcat:
+    threads:
+      # Each request thread reserves a stack; 200 (the default) is far more than a
+      # 512 MB instance needs or can afford.
+      max: 50
 
 spring:
   application:
@@ -72,7 +77,7 @@ camunda:
         login-max-attempts: 2147483647
         login-delay-max-time: 0
     client:
-      base-url: http://localhost:${server.port}/engine-rest
+      # base-url defaults to this server's own engine REST API on the port it listens on.
       # Long-poll window (ms). A poll returns at once when a task is created, so this only
       # bounds idle polls, and with them how long shutdown waits for the last poll to end.
       async-response-timeout: 5000

@@ -5,6 +5,7 @@ import com.enterprise.regulatory.model.enums.ApprovalStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,6 +13,8 @@ import java.util.UUID;
 public interface RegulatoryRequestRepository extends JpaRepository<RegulatoryRequest, UUID> {
     
     Optional<RegulatoryRequest> findByProcessInstanceId(String processInstanceId);
+    
+    List<RegulatoryRequest> findByProcessInstanceIdIn(Collection<String> processInstanceIds);
     
     List<RegulatoryRequest> findBySubmitterIdOrderByCreatedAtDesc(String submitterId);
     

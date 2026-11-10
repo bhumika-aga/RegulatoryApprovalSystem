@@ -43,14 +43,21 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
 
-# JVM options optimized for low memory (512MB free tier)
-# - Xmx384m: Hard limit heap to 384MB
-# - Xms256m: Start with 256MB heap
-# - UseSerialGC: Lower memory overhead than G1GC
+# JVM options for a 512 MB container (Render's free tier). Measured under load, the live heap is
+# ~95 MB and class metadata ~125 MB (Camunda, Spring, Hibernate), so the heap is kept lean:
+# - Xms64m / Xmx256m: start small and grow only as needed, capped well inside the container
+# - Min/MaxHeapFreeRatio: keep little free heap committed, and give it back after a burst
+# - Xss512k: half the default thread stack (Tomcat is also capped at 50 threads)
+# - ReservedCodeCacheSize=64m: room for compiled code, fewer code-cache-triggered full GCs
+# - UseSerialGC: lower memory overhead than G1GC
 # - TieredStopAtLevel=1: Reduce JIT compilation memory
 ENTRYPOINT ["java", \
-    "-Xms256m", \
-    "-Xmx384m", \
+    "-Xms64m", \
+    "-Xmx256m", \
+    "-XX:MinHeapFreeRatio=10", \
+    "-XX:MaxHeapFreeRatio=30", \
+    "-Xss512k", \
+    "-XX:ReservedCodeCacheSize=64m", \
     "-XX:+UseSerialGC", \
     "-XX:TieredStopAtLevel=1", \
     "-Djava.security.egd=file:/dev/./urandom", \

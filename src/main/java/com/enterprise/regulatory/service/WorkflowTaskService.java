@@ -11,7 +11,9 @@ import com.enterprise.regulatory.security.SecurityUtils;
 import com.enterprise.regulatory.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.camunda.bpm.engine.RuntimeService;
 import org.camunda.bpm.engine.TaskService;
+import org.camunda.bpm.engine.runtime.VariableInstance;
 import org.camunda.bpm.engine.task.IdentityLink;
 import org.camunda.bpm.engine.task.Task;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,6 +37,7 @@ public class WorkflowTaskService {
     private static final String SUBMITTER_TASK_DEFINITION_KEY = "Task_RequestInfo";
     
     private final TaskService camundaTaskService;
+    private final RuntimeService runtimeService;
     private final RegulatoryRequestRepository requestRepository;
     private final SecurityUtils securityUtils;
     
@@ -51,45 +54,25 @@ public class WorkflowTaskService {
         
         log.debug("Fetching tasks for user: {} with roles: {}", username, roles);
         
-        // Get tasks assigned to user
-        List<Task> assignedTasks = camundaTaskService.createTaskQuery()
-                                       .taskAssignee(username)
-                                       .active()
-                                       .orderByTaskCreateTime()
-                                       .desc()
-                                       .list();
-        
-        // Get tasks available for user's groups (candidate groups)
-        List<Task> candidateTasks = new ArrayList<>();
-        for (String role : roles) {
-            List<Task> groupTasks = camundaTaskService.createTaskQuery()
-                                        .taskCandidateGroup(role)
-                                        .taskUnassigned()
-                                        .active()
-                                        .list();
-            candidateTasks.addAll(groupTasks);
+        // One query: tasks assigned to the user, or unassigned tasks one of their roles is a
+        // candidate for (a candidate-group criterion excludes assigned tasks by default).
+        var query = camundaTaskService.createTaskQuery().active();
+        if (roles.isEmpty()) {
+            query.taskAssignee(username);
+        } else {
+            query.or()
+                .taskAssignee(username)
+                .taskCandidateGroupIn(new ArrayList<>(roles))
+                .endOr();
         }
-        
-        // Combine and deduplicate
-        Set<String> taskIds = new HashSet<>();
-        List<Task> allTasks = new ArrayList<>();
-        
-        for (Task task : assignedTasks) {
-            if (taskIds.add(task.getId())) {
-                allTasks.add(task);
-            }
-        }
-        for (Task task : candidateTasks) {
-            if (taskIds.add(task.getId())) {
-                allTasks.add(task);
-            }
-        }
+        List<Task> tasks = query.orderByTaskCreateTime().desc().list();
         
         // Hide tasks the user may not act on because they submitted the request.
-        return allTasks.stream()
-                   .filter(task -> !isReviewOfOwnRequest(task, username))
-                   .map(this::buildTaskResponse)
-                   .collect(Collectors.toList());
+        Map<String, String> submitters = submittersByProcessInstance(tasks);
+        List<Task> actionable = tasks.stream()
+                                    .filter(task -> !isReviewOfOwnRequest(task, username, submitters))
+                                    .toList();
+        return buildTaskResponses(actionable);
     }
     
     @Transactional(readOnly = true)
@@ -103,9 +86,7 @@ public class WorkflowTaskService {
                                .asc()
                                .list();
         
-        return tasks.stream()
-                   .map(this::buildTaskResponse)
-                   .collect(Collectors.toList());
+        return buildTaskResponses(tasks);
     }
     
     @Transactional(readOnly = true)
@@ -360,12 +341,28 @@ public class WorkflowTaskService {
      * "Provide Additional Information" is excluded: it is assigned to the submitter by design.
      */
     private boolean isReviewOfOwnRequest(Task task, String username) {
+        return isReviewOfOwnRequest(task, username, submittersByProcessInstance(List.of(task)));
+    }
+    
+    private boolean isReviewOfOwnRequest(Task task, String username, Map<String, String> submitters) {
         if (SUBMITTER_TASK_DEFINITION_KEY.equals(task.getTaskDefinitionKey())) {
             return false;
         }
-        return requestRepository.findByProcessInstanceId(task.getProcessInstanceId())
-                   .map(request -> username.equals(request.getSubmitterId()))
-                   .orElse(false);
+        return username.equals(submitters.get(task.getProcessInstanceId()));
+    }
+    
+    /**
+     * Submitter of each task's request, keyed by process instance id, in one query.
+     */
+    private Map<String, String> submittersByProcessInstance(List<Task> tasks) {
+        Set<String> processInstanceIds = tasks.stream().map(Task::getProcessInstanceId).collect(Collectors.toSet());
+        if (processInstanceIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> submitters = new HashMap<>();
+        requestRepository.findByProcessInstanceIdIn(processInstanceIds)
+            .forEach(request -> submitters.put(request.getProcessInstanceId(), request.getSubmitterId()));
+        return submitters;
     }
     
     /**
@@ -404,29 +401,68 @@ public class WorkflowTaskService {
         }
     }
     
+    /**
+     * Process variables shown with each task.
+     */
+    private static final String[] TASK_LIST_VARIABLES =
+        {"requestTitle", "requestType", "department", "riskScore", "riskCategory", "escalated"};
+    
     private TaskResponse buildTaskResponse(Task task) {
-        Map<String, Object> variables = camundaTaskService.getVariables(task.getId());
+        return buildTaskResponses(List.of(task)).get(0);
+    }
+    
+    /**
+     * Builds responses for several tasks, reading their process variables in one query
+     * (candidate groups are still read per task: the engine has no batch lookup for them).
+     */
+    private List<TaskResponse> buildTaskResponses(List<Task> tasks) {
+        if (tasks.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Map<String, Object>> variablesByProcess = processVariables(
+            tasks.stream().map(Task::getProcessInstanceId).distinct().toArray(String[]::new));
         
-        Set<String> candidateGroups = getCandidateGroups(task.getId());
-        
-        return Objects.requireNonNull(TaskResponse.builder()
-                                          .taskId(task.getId())
-                                          .taskName(task.getName())
-                                          .taskDefinitionKey(task.getTaskDefinitionKey())
-                                          .processInstanceId(task.getProcessInstanceId())
-                                          .processDefinitionKey(task.getProcessDefinitionId())
-                                          .assignee(task.getAssignee())
-                                          .candidateGroups(candidateGroups)
-                                          .createTime(task.getCreateTime())
-                                          .dueDate(task.getDueDate())
-                                          .description(task.getDescription())
-                                          .priority(task.getPriority())
-                                          .requestTitle((String) variables.get("requestTitle"))
-                                          .requestType((String) variables.get("requestType"))
-                                          .department((String) variables.get("department"))
-                                          .riskScore((Integer) variables.get("riskScore"))
-                                          .riskCategory((String) variables.get("riskCategory"))
-                                          .escalated((Boolean) variables.get("escalated"))
-                                          .build());
+        return tasks.stream().map(task -> {
+            Map<String, Object> variables = variablesByProcess.getOrDefault(task.getProcessInstanceId(), Map.of());
+            return Objects.requireNonNull(TaskResponse.builder()
+                                              .taskId(task.getId())
+                                              .taskName(task.getName())
+                                              .taskDefinitionKey(task.getTaskDefinitionKey())
+                                              .processInstanceId(task.getProcessInstanceId())
+                                              .processDefinitionKey(task.getProcessDefinitionId())
+                                              .assignee(task.getAssignee())
+                                              .candidateGroups(getCandidateGroups(task.getId()))
+                                              .createTime(task.getCreateTime())
+                                              .dueDate(task.getDueDate())
+                                              .description(task.getDescription())
+                                              .priority(task.getPriority())
+                                              .requestTitle((String) variables.get("requestTitle"))
+                                              .requestType((String) variables.get("requestType"))
+                                              .department((String) variables.get("department"))
+                                              .riskScore((Integer) variables.get("riskScore"))
+                                              .riskCategory((String) variables.get("riskCategory"))
+                                              .escalated((Boolean) variables.get("escalated"))
+                                              .build());
+        }).toList();
+    }
+    
+    /**
+     * The task-list variables of each process instance, read in one query. Process-level values
+     * win over same-named local ones (e.g. a service task's input parameters).
+     */
+    private Map<String, Map<String, Object>> processVariables(String... processInstanceIds) {
+        Map<String, Map<String, Object>> result = new HashMap<>();
+        for (VariableInstance variable : runtimeService.createVariableInstanceQuery()
+                                             .processInstanceIdIn(processInstanceIds)
+                                             .variableNameIn(TASK_LIST_VARIABLES)
+                                             .list()) {
+            Map<String, Object> variables = result.computeIfAbsent(variable.getProcessInstanceId(), id -> new HashMap<>());
+            boolean processLevel = variable.getProcessInstanceId().equals(variable.getExecutionId())
+                                       && variable.getTaskId() == null;
+            if (processLevel || !variables.containsKey(variable.getName())) {
+                variables.put(variable.getName(), variable.getValue());
+            }
+        }
+        return result;
     }
 }

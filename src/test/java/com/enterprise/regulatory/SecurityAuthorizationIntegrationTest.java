@@ -21,12 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * End-to-end authentication and authorization tests over real HTTP.
  *
- * <p>Runs the full application on the configured port so the external task
- * workers can complete the automated risk-scoring step and produce the human
- * tasks the authorization checks act on. The application has no built-in secrets,
+ * <p>Runs the full application, on a random free port, so the external task
+ * workers (which follow the server's actual port) can complete the automated steps
+ * and produce the human tasks the authorization checks act on. The application has no built-in secrets,
  * so the test supplies them (test-only values).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT, properties = {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
     "JWT_SECRET=" + SecurityAuthorizationIntegrationTest.TEST_JWT_SECRET,
     "CAMUNDA_ADMIN_PASSWORD=" + SecurityAuthorizationIntegrationTest.CAMUNDA_PASSWORD,
     "AUTH_DEFAULT_PASSWORD=" + SecurityAuthorizationIntegrationTest.PASSWORD,
