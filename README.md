@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/bhumika-aga/RegulatoryApprovalSystem/actions/workflows/ci.yml/badge.svg)](https://github.com/bhumika-aga/RegulatoryApprovalSystem/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.15-green.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.16-green.svg)](https://spring.io/projects/spring-boot)
 [![Camunda](https://img.shields.io/badge/Camunda-7.24.0-blue.svg)](https://camunda.com/)
 [![H2](https://img.shields.io/badge/H2-In--Memory-blue.svg)](https://www.h2database.com/)
 
@@ -207,9 +207,28 @@ an optional `comment`, and optional `additionalVariables`.
 
 A ready-to-run **Postman collection** is included: [
 `RegulatoryApprovalSystem.postman_collection.json`](RegulatoryApprovalSystem.postman_collection.json).
-Import it, then run the requests top-to-bottom (or via the Collection Runner) — test scripts capture the JWT tokens,
-process-instance id, request id and task id into collection variables automatically, so the full approval flow runs
-without manual copy/paste. Each key request ships with a saved example response captured from a live run.
+It walks a request through the full approval (Initial Review → Manager Approval → automated compliance → Final
+Approval), plus a rejection flow, a termination, audit queries and health/security checks. Every request asserts its
+status code and key fields, and test scripts capture tokens and ids into collection variables, so it runs top-to-bottom
+without copy/paste. Steps that wait for a background worker retry themselves for up to ~30 seconds. Run it in the
+Collection Runner, or from the command line:
+
+```bash
+postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080
+```
+
+Set the `authPassword` collection variable if the API users' password is not the default.
+
+**Smoke test.** [`scripts/smoke_test.py`](scripts/smoke_test.py) (Python 3, standard library only) runs ~60 checks
+against a running instance: every route through the process (approval, rejection, request-more-information loop,
+escalation to a senior manager, manual compliance review, claim/unclaim, termination), role enforcement, read scoping,
+the audit trail, and the exposed surface (Swagger, actuator, engine REST API authentication, H2 console):
+
+```bash
+python3 scripts/smoke_test.py --base-url http://localhost:8080 --camunda-password "$CAMUNDA_ADMIN_PASSWORD"
+```
+
+Both create workflows, so run them against a local or test instance, not one holding real data.
 
 Interactive docs are also available via Swagger UI at `/swagger-ui.html`.
 
@@ -230,7 +249,7 @@ Every push and pull request runs these via GitHub Actions (`.github/workflows/ci
 
 ## 🛠️ Technology Stack
 
-- **Framework**: Spring Boot 3.5.15 (Java 21)
+- **Framework**: Spring Boot 3.5.16 (Java 21)
 - **Workflow**: Camunda BPM 7.24 (engine, REST, webapp, external-task client)
 - **Security**: Spring Security + JJWT (HS512)
 - **API docs**: SpringDoc OpenAPI (Swagger UI)
