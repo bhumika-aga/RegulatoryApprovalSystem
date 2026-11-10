@@ -2,7 +2,7 @@
   "info": {
     "name": "Regulatory Approval System",
     "_postman_id": "b1e7c3a4-2f10-4d8e-9a21-regulatory0001",
-    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the requests top-to-bottom (or via the Collection Runner). Test scripts automatically capture the JWT tokens, process instance id, request id and task id into collection variables, so the whole approval flow can be executed without manual copy/paste.\n\nDefault flow (happy path):\n1. Authentication > Generate Token (Reviewer / Manager / Admin / Auditor)\n2. Workflow > Start Workflow  (risk scoring runs, Initial Review task is created)\n3. Tasks > Get My Tasks (Reviewer) -> Complete Task (APPROVED)\n4. Tasks > Get My Tasks (Manager) -> Complete Task (APPROVED)  (compliance check runs)\n5. Tasks > Get My Tasks (Admin) -> Complete Task (APPROVED)  (final approval)\n6. Workflow > Get Workflow Status -> APPROVED\n7. Audit > Get Audit Trail for Process\n\nAll example responses were captured from a live run of the service.",
+    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the whole collection top-to-bottom with the Collection Runner or the Postman CLI:\n\n    postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080\n\nEvery request asserts its status code and key fields. Test scripts capture tokens, process instance ids and task ids into collection variables, so no copy/paste is needed. Steps that wait for a background job worker (risk scoring, compliance check, completion) retry themselves for up to ~30 seconds; when sending requests by hand, just send such a step again.\n\nFlow:\n1. Authentication — tokens for reviewer, manager, admin, auditor; token refresh\n2. Workflow — reviewer starts a request; workflow queries\n3. Approval Flow — Initial Review -> Manager Approval -> automated compliance -> Final Approval -> APPROVED\n4. Rejection Flow — a second request rejected at Initial Review\n5. Termination — a third request terminated by an admin\n6. Audit — audit trail queries\n7. Health & Security\n\nSet the authPassword variable if the API users' password (AUTH_DEFAULT_PASSWORD) is not the default. Example responses were captured from a live run of the service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -45,11 +45,24 @@
     {
       "key": "taskId",
       "value": ""
+    },
+    {
+      "key": "rejectProcessInstanceId",
+      "value": ""
+    },
+    {
+      "key": "rejectTaskId",
+      "value": ""
+    },
+    {
+      "key": "terminateProcessInstanceId",
+      "value": ""
     }
   ],
   "item": [
     {
-      "name": "Authentication",
+      "name": "1. Authentication",
+      "description": "Obtain JWTs for each role used by the flow. Roles come from the server's user store.",
       "item": [
         {
           "name": "Generate Token (Reviewer)",
@@ -59,8 +72,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "const res = pm.response.json();",
-                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('Roles are server-controlled', () => pm.expect(res.data.roles).to.eql(['REVIEWER']));",
                   "pm.collectionVariables.set('token', res.data.accessToken);",
                   "pm.collectionVariables.set('refreshToken', res.data.refreshToken);"
                 ]
@@ -89,7 +103,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"reviewer\",\n  \"password\": \"{{authPassword}}\"\n}"
+              "raw": "{\n  \"username\": \"reviewer\",\n  \"password\": \"{{authPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [
@@ -140,6 +159,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('managerToken', pm.response.json().data.accessToken);"
                 ]
               }
@@ -167,7 +187,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"manager\",\n  \"password\": \"{{authPassword}}\"\n}"
+              "raw": "{\n  \"username\": \"manager\",\n  \"password\": \"{{authPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -180,6 +205,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('adminToken', pm.response.json().data.accessToken);"
                 ]
               }
@@ -207,7 +233,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"{{authPassword}}\"\n}"
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"{{authPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -220,6 +251,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('auditorToken', pm.response.json().data.accessToken);"
                 ]
               }
@@ -247,13 +279,30 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"auditor\",\n  \"password\": \"{{authPassword}}\"\n}"
+              "raw": "{\n  \"username\": \"auditor\",\n  \"password\": \"{{authPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
         },
         {
           "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Refreshed token keeps the REVIEWER role', () => pm.expect(pm.response.json().data.roles).to.eql(['REVIEWER']));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -280,7 +329,8 @@
       ]
     },
     {
-      "name": "Workflow",
+      "name": "2. Workflow",
+      "description": "Start the request used by the approval flow (as the reviewer) and query workflows.",
       "item": [
         {
           "name": "Start Workflow",
@@ -290,8 +340,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
                   "const res = pm.response.json();",
-                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Workflow is in review', () => pm.expect(res.data.status).to.eql('IN_REVIEW'));",
                   "pm.collectionVariables.set('processInstanceId', res.data.processInstanceId);",
                   "pm.collectionVariables.set('requestId', res.data.requestId);"
                 ]
@@ -324,7 +375,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requestTitle\": \"Onboard new payment vendor\",\n  \"requestDescription\": \"Approve integration of a new low-risk operational payment vendor\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}"
+              "raw": "{\n  \"requestTitle\": \"Onboard new payment vendor\",\n  \"requestDescription\": \"Approve integration of a new low-risk operational payment vendor\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [
@@ -373,6 +429,18 @@
         },
         {
           "name": "Get Workflow Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the started workflow', () => pm.expect(pm.response.json().data.processInstanceId).to.eql(pm.collectionVariables.get('processInstanceId')));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -434,6 +502,18 @@
         },
         {
           "name": "Get Workflow by Request ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns the request', () => pm.expect(pm.response.json().data.requestId).to.eql(pm.collectionVariables.get('requestId')));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -459,6 +539,18 @@
         },
         {
           "name": "Get My Requests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Includes the started request', () => pm.expect(pm.response.json().data.map(w => w.requestId)).to.include(pm.collectionVariables.get('requestId')));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -484,6 +576,18 @@
         },
         {
           "name": "Get Workflows by User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns a list', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -510,6 +614,18 @@
         },
         {
           "name": "Get Workflows by Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns a list', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -519,7 +635,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/workflow/by-status/APPROVED",
+              "raw": "{{baseUrl}}/api/v1/workflow/by-status/IN_REVIEW",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -528,15 +644,26 @@
                 "v1",
                 "workflow",
                 "by-status",
-                "APPROVED"
-              ],
-              "description": "status: PENDING | IN_REVIEW | APPROVED | REJECTED | COMPLETED | TERMINATED"
+                "IN_REVIEW"
+              ]
             }
           },
           "response": []
         },
         {
           "name": "Get Escalated Workflows",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns a list', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -559,93 +686,46 @@
             }
           },
           "response": []
-        },
-        {
-          "name": "Terminate Workflow",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/workflow/{{processInstanceId}}?reason=Duplicate request",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "workflow",
-                "{{processInstanceId}}"
-              ],
-              "query": [
-                {
-                  "key": "reason",
-                  "value": "Duplicate request"
-                }
-              ]
-            }
-          },
-          "response": [
-            {
-              "name": "200 - Terminated",
-              "originalRequest": {
-                "method": "DELETE",
-                "header": [
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{adminToken}}"
-                  }
-                ],
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/workflow/{{processInstanceId}}?reason=Duplicate request",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v1",
-                    "workflow",
-                    "{{processInstanceId}}"
-                  ],
-                  "query": [
-                    {
-                      "key": "reason",
-                      "value": "Duplicate request"
-                    }
-                  ]
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Workflow terminated successfully\",\n  \"timestamp\": \"2026-06-15T17:42:08.451393\"\n}"
-            }
-          ]
         }
       ]
     },
     {
-      "name": "Tasks",
+      "name": "3. Approval Flow",
+      "description": "Drives the request through Initial Review (reviewer) -> Manager Approval (manager) -> automated compliance check -> Final Approval (admin). Steps that wait for a background job worker retry themselves for up to ~30 seconds when run in the Collection Runner or Postman CLI.",
       "item": [
         {
           "name": "Get My Tasks (Reviewer)",
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "const res = pm.response.json();",
-                  "if (res.data && res.data.length) { pm.collectionVariables.set('taskId', res.data[0].taskId); }"
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('processInstanceId') && t.taskDefinitionKey === 'Task_InitialReview');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Initial Review task is available', () => pm.expect(found, 'Initial Review task is available').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('taskId', found.taskId); }",
+                  "    pm.test('Risk score was assigned', () => pm.expect(found && found.riskScore).to.be.a('number'));",
+                  "}"
                 ]
               }
             }
@@ -706,79 +786,19 @@
           ]
         },
         {
-          "name": "Get My Tasks (Manager)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res.data && res.data.length) { pm.collectionVariables.set('taskId', res.data[0].taskId); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{managerToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/tasks",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "tasks"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Get My Tasks (Admin)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res.data && res.data.length) { pm.collectionVariables.set('taskId', res.data[0].taskId); }"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/tasks",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "tasks"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Get Tasks by Process",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Lists the Initial Review task', () => pm.expect(pm.response.json().data.map(t => t.taskId)).to.include(pm.collectionVariables.get('taskId')));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -805,6 +825,18 @@
         },
         {
           "name": "Get Task Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Is the Initial Review task', () => pm.expect(pm.response.json().data.taskDefinitionKey).to.eql('Task_InitialReview'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -830,12 +862,24 @@
         },
         {
           "name": "Claim Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Assigned to the reviewer', () => pm.expect(pm.response.json().data.assignee).to.eql('reviewer'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{managerToken}}"
+                "value": "Bearer {{token}}"
               }
             ],
             "url": {
@@ -856,12 +900,23 @@
         },
         {
           "name": "Unclaim Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{managerToken}}"
+                "value": "Bearer {{token}}"
               }
             ],
             "url": {
@@ -881,7 +936,69 @@
           "response": []
         },
         {
-          "name": "Complete Task (APPROVED)",
+          "name": "Complete Task as Wrong Role (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "A MANAGER is not a candidate for the reviewer's Initial Review task, so this is refused."
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Initial Review (APPROVED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -1006,7 +1123,76 @@
           ]
         },
         {
-          "name": "Complete Task (REJECTED)",
+          "name": "Get My Tasks (Manager)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('processInstanceId') && t.taskDefinitionKey === 'Task_ManagerApproval');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Manager Approval task is available', () => pm.expect(found, 'Manager Approval task is available').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('taskId', found.taskId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Manager Approval (APPROVED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -1016,7 +1202,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{managerToken}}"
               }
             ],
             "url": {
@@ -1034,6 +1220,338 @@
             },
             "body": {
               "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Approved by line manager\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Tasks (Admin)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('processInstanceId') && t.taskDefinitionKey === 'Task_FinalApproval');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Final Approval task is available (compliance check passed)', () => pm.expect(found, 'Final Approval task is available (compliance check passed)').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('taskId', found.taskId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Final Approval (APPROVED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Final approval granted\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workflow Status (Approved)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || {}).status === 'APPROVED' ? pm.response.json().data : null;",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Workflow is APPROVED', () => pm.expect(found, 'Workflow is APPROVED').to.be.ok);",
+                  "    pm.test('Stage is COMPLETED', () => pm.expect(found && found.currentStage).to.eql('COMPLETED'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/status/{{processInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "status",
+                "{{processInstanceId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Rejection Flow",
+      "description": "A second request, rejected by the reviewer at Initial Review.",
+      "item": [
+        {
+          "name": "Start Workflow (to reject)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('rejectProcessInstanceId', pm.response.json().data.processInstanceId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestTitle\": \"Vendor without due-diligence pack\",\n  \"requestDescription\": \"Approve integration of a new low-risk operational payment vendor\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Tasks (Reviewer, to reject)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('rejectProcessInstanceId') && t.taskDefinitionKey === 'Task_InitialReview');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Initial Review task is available', () => pm.expect(found, 'Initial Review task is available').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('rejectTaskId', found.taskId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Task (REJECTED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{rejectTaskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{rejectTaskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
               "raw": "{\n  \"decision\": \"REJECTED\",\n  \"comment\": \"Does not meet regulatory criteria\"\n}",
               "options": {
                 "raw": {
@@ -1043,14 +1561,265 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Get Workflow Status (Rejected)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || {}).status === 'REJECTED' ? pm.response.json().data : null;",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Workflow is REJECTED', () => pm.expect(found, 'Workflow is REJECTED').to.be.ok);",
+                  "    pm.test('Rejection reason names the stage', () => pm.expect(found && found.rejectionReason).to.include('Initial Review'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/status/{{rejectProcessInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "status",
+                "{{rejectProcessInstanceId}}"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
     {
-      "name": "Audit",
+      "name": "5. Termination",
+      "description": "A third request, terminated by an administrator while still running.",
+      "item": [
+        {
+          "name": "Start Workflow (to terminate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('terminateProcessInstanceId', pm.response.json().data.processInstanceId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestTitle\": \"Duplicate vendor onboarding\",\n  \"requestDescription\": \"Approve integration of a new low-risk operational payment vendor\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminate Workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/{{terminateProcessInstanceId}}?reason=Duplicate request",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "{{terminateProcessInstanceId}}"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Duplicate request"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Terminated",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/workflow/{{processInstanceId}}?reason=Duplicate request",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "workflow",
+                    "{{processInstanceId}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "reason",
+                      "value": "Duplicate request"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Workflow terminated successfully\",\n  \"timestamp\": \"2026-06-15T17:42:08.451393\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Workflow Status (Terminated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Workflow is TERMINATED', () => pm.expect(pm.response.json().data.status).to.eql('TERMINATED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/status/{{terminateProcessInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "status",
+                "{{terminateProcessInstanceId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Audit",
+      "description": "Audit trail queries (AUDITOR / ADMIN / COMPLIANCE).",
       "item": [
         {
           "name": "Get Audit Trail for Process",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const types = pm.response.json().data.map(e => e.eventType);",
+                  "['WORKFLOW_STARTED', 'TASK_CREATED', 'DECISION_MADE', 'COMPLIANCE_CHECK_PASSED', 'WORKFLOW_COMPLETED']",
+                  "    .forEach(t => pm.test('Audit trail has ' + t, () => pm.expect(types).to.include(t)));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1146,6 +1915,18 @@
         },
         {
           "name": "Get Audit Trail for Task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has events for the task', () => pm.expect(pm.response.json().data).to.not.be.empty);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1172,6 +1953,18 @@
         },
         {
           "name": "Get Audit Trail by User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has events by the reviewer', () => pm.expect(pm.response.json().data).to.not.be.empty);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1198,6 +1991,18 @@
         },
         {
           "name": "Get Audits by Event Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has completed workflows', () => pm.expect(pm.response.json().data).to.not.be.empty);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1217,14 +2022,25 @@
                 "audit",
                 "event-type",
                 "WORKFLOW_COMPLETED"
-              ],
-              "description": "WORKFLOW_STARTED | TASK_CREATED | TASK_CLAIMED | TASK_COMPLETED | TASK_ESCALATED | DECISION_MADE | COMPLIANCE_CHECK_PASSED | COMPLIANCE_CHECK_FAILED | SLA_BREACH | WORKFLOW_COMPLETED | WORKFLOW_TERMINATED"
+              ]
             }
           },
           "response": []
         },
         {
           "name": "Get Audits by Date Range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns events', () => pm.expect(pm.response.json().data).to.not.be.empty);"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1234,7 +2050,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/audit/date-range?startDate=2026-01-01T00:00:00&endDate=2027-01-01T00:00:00",
+              "raw": "{{baseUrl}}/api/v1/audit/date-range?startDate=2026-01-01T00:00:00&endDate=2099-12-31T23:59:59",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1251,7 +2067,7 @@
                 },
                 {
                   "key": "endDate",
-                  "value": "2027-01-01T00:00:00"
+                  "value": "2099-12-31T23:59:59"
                 }
               ]
             }
@@ -1260,6 +2076,18 @@
         },
         {
           "name": "Get SLA Breaches",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns a list', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1291,6 +2119,18 @@
         },
         {
           "name": "Count Events Since",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Counts created tasks', () => pm.expect(pm.response.json().data).to.be.above(0));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -1320,14 +2160,65 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Audit Forbidden for Reviewer (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/audit/user/reviewer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "audit",
+                "user",
+                "reviewer"
+              ]
+            },
+            "description": "Audit endpoints are restricted to AUDITOR, ADMIN and COMPLIANCE."
+          },
+          "response": []
         }
       ]
     },
     {
-      "name": "Health",
+      "name": "7. Health & Security",
+      "description": "Public health probe and unauthenticated access.",
       "item": [
         {
           "name": "Health Check (Actuator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
@@ -1373,6 +2264,17 @@
         },
         {
           "name": "Unauthorized (no token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
