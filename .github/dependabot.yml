@@ -52,3 +52,9 @@ updates:
     labels:
       - dependencies
       - docker
+    # The project targets Java 21 (pom.xml, CI, Docker). Ignore JDK major bumps of
+    # the Temurin images so the image is not moved off 21 again (as happened with
+    # 21 -> 25); patch/minor updates of the 21 tags still come through.
+    ignore:
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]

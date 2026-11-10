@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/bhumika-aga/RegulatoryApprovalSystem/actions/workflows/ci.yml/badge.svg)](https://github.com/bhumika-aga/RegulatoryApprovalSystem/actions/workflows/ci.yml)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](https://openjdk.java.net/projects/jdk/21/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.15-green.svg)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.16-green.svg)](https://spring.io/projects/spring-boot)
 [![Camunda](https://img.shields.io/badge/Camunda-7.24.0-blue.svg)](https://camunda.com/)
 [![H2](https://img.shields.io/badge/H2-In--Memory-blue.svg)](https://www.h2database.com/)
 
@@ -230,7 +230,7 @@ Every push and pull request runs these via GitHub Actions (`.github/workflows/ci
 
 ## 🛠️ Technology Stack
 
-- **Framework**: Spring Boot 3.5.15 (Java 21)
+- **Framework**: Spring Boot 3.5.16 (Java 21)
 - **Workflow**: Camunda BPM 7.24 (engine, REST, webapp, external-task client)
 - **Security**: Spring Security + JJWT (HS512)
 - **API docs**: SpringDoc OpenAPI (Swagger UI)
