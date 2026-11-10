@@ -1,6 +1,6 @@
 package com.enterprise.regulatory.worker;
 
-import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
+import com.enterprise.regulatory.service.RequestUpdateService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,12 +13,9 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
 
 /**
  * External Task Worker for Risk Scoring.
@@ -30,11 +27,10 @@ import java.util.UUID;
 public class RiskScoringWorker implements ExternalTaskHandler {
     
     private static final String TOPIC_NAME = "risk-scoring";
-    private static final int MAX_RETRIES = 3;
     private static final long RETRY_TIMEOUT = 5000L;
     
     private final ExternalTaskClient externalTaskClient;
-    private final RegulatoryRequestRepository requestRepository;
+    private final RequestUpdateService requestUpdateService;
     private TopicSubscription subscription;
     
     @EventListener(ApplicationReadyEvent.class)
@@ -55,7 +51,6 @@ public class RiskScoringWorker implements ExternalTaskHandler {
     }
     
     @Override
-    @Transactional
     public void execute(ExternalTask externalTask, ExternalTaskService externalTaskService) {
         String requestId = externalTask.getVariable("requestId");
         String requestType = externalTask.getVariable("requestType");
@@ -142,31 +137,23 @@ public class RiskScoringWorker implements ExternalTaskHandler {
     }
     
     private void updateRequestRiskScore(String requestId, int riskScore) {
-        try {
-            UUID uuid = UUID.fromString(requestId);
-            requestRepository.findById(Objects.requireNonNull(uuid)).ifPresent(request -> {
-                request.setRiskScore(riskScore);
-                requestRepository.save(request);
-            });
-        } catch (IllegalArgumentException e) {
-            log.warn("Could not parse requestId as UUID: {}", requestId);
-        }
+        requestUpdateService.update(requestId, request -> request.setRiskScore(riskScore));
     }
     
     private void handleFailure(ExternalTask externalTask, ExternalTaskService externalTaskService, Exception e) {
-        int retries = externalTask.getRetries() != null ? externalTask.getRetries() : MAX_RETRIES;
+        int remaining = WorkerRetries.remainingAfterFailure(externalTask);
         
-        if (retries > 0) {
-            log.warn("Retrying risk scoring, remaining retries: {}", retries - 1);
+        if (remaining > 0) {
+            log.warn("Retrying risk scoring, remaining retries: {}", remaining);
             externalTaskService.handleFailure(
                 externalTask,
                 "Risk scoring failed: " + e.getMessage(),
                 e.getClass().getName(),
-                retries - 1,
+                remaining,
                 RETRY_TIMEOUT);
         } else {
-            log.error("Max retries exceeded for risk scoring, creating incident");
-            // Set default risk score and continue
+            log.error("Risk scoring failed on the last attempt; continuing with the default score 50 / MEDIUM");
+            // Non-blocking: set the default risk score and continue
             Map<String, Object> variables = new HashMap<>();
             variables.put("riskScore", 50);
             variables.put("riskCategory", "MEDIUM");

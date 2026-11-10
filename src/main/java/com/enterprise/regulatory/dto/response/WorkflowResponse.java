@@ -1,6 +1,7 @@
 package com.enterprise.regulatory.dto.response;
 
 import com.enterprise.regulatory.model.enums.ApprovalStatus;
+import com.enterprise.regulatory.model.enums.ComplianceResult;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,6 +29,7 @@ public class WorkflowResponse {
     private String currentAssignee;
     private String submitterId;
     private Integer riskScore;
+    private ComplianceResult complianceResult;
     private Boolean escalated;
     private String escalationReason;
     private String rejectionReason;

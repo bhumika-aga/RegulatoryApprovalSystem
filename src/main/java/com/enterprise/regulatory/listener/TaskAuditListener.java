@@ -1,12 +1,15 @@
 package com.enterprise.regulatory.listener;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
+import com.enterprise.regulatory.model.enums.ReviewStep;
 import com.enterprise.regulatory.service.AuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.delegate.DelegateTask;
 import org.camunda.bpm.engine.delegate.TaskListener;
 import org.springframework.stereotype.Component;
+
+import java.util.Optional;
 
 /**
  * Task Listener for recording audit events on task lifecycle events.
@@ -141,61 +144,30 @@ public class TaskAuditListener implements TaskListener {
         return comment.toString();
     }
     
+    private Optional<ReviewStep> stepOf(DelegateTask delegateTask) {
+        return ReviewStep.of(delegateTask.getTaskDefinitionKey());
+    }
+    
     private String extractDecision(DelegateTask delegateTask) {
-        String taskName = delegateTask.getName();
-        
-        // Try to get the appropriate decision variable based on task
-        Object decision = null;
-        if (taskName.contains("Initial Review")) {
-            decision = delegateTask.getVariable("reviewerDecision");
-        } else if (taskName.contains("Manager")) {
-            decision = delegateTask.getVariable("managerDecision");
-        } else if (taskName.contains("Senior Manager")) {
-            decision = delegateTask.getVariable("seniorManagerDecision");
-        } else if (taskName.contains("Compliance")) {
-            decision = delegateTask.getVariable("manualComplianceDecision");
-        } else if (taskName.contains("Final")) {
-            decision = delegateTask.getVariable("finalDecision");
-        }
-        
-        return decision != null ? decision.toString() : null;
+        return stepOf(delegateTask)
+                   .map(ReviewStep::decisionVariable)
+                   .map(delegateTask::getVariable)
+                   .map(Object::toString)
+                   .orElse(null);
     }
     
     private String extractComment(DelegateTask delegateTask) {
         Object comment = delegateTask.getVariable("taskComment");
-        if (comment != null) {
-            return comment.toString();
+        if (comment == null) {
+            comment = stepOf(delegateTask)
+                          .map(ReviewStep::commentVariable)
+                          .map(delegateTask::getVariable)
+                          .orElse(null);
         }
-        
-        // Try task-specific comments
-        String taskName = delegateTask.getName();
-        if (taskName.contains("Initial Review")) {
-            comment = delegateTask.getVariable("reviewerComment");
-        } else if (taskName.contains("Manager")) {
-            comment = delegateTask.getVariable("managerComment");
-        } else if (taskName.contains("Compliance")) {
-            comment = delegateTask.getVariable("complianceComment");
-        } else if (taskName.contains("Final")) {
-            comment = delegateTask.getVariable("finalComment");
-        }
-        
         return comment != null ? comment.toString() : null;
     }
     
     private String extractRole(DelegateTask delegateTask) {
-        String taskName = delegateTask.getName();
-        
-        if (taskName.contains("Initial Review"))
-            return "REVIEWER";
-        if (taskName.contains("Senior Manager"))
-            return "SENIOR_MANAGER";
-        if (taskName.contains("Manager"))
-            return "MANAGER";
-        if (taskName.contains("Compliance"))
-            return "COMPLIANCE";
-        if (taskName.contains("Final"))
-            return "ADMIN";
-        
-        return null;
+        return stepOf(delegateTask).map(ReviewStep::role).orElse(null);
     }
 }

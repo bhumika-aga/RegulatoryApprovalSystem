@@ -3,6 +3,7 @@ package com.enterprise.regulatory.worker;
 import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.enterprise.regulatory.model.enums.ComplianceResult;
 import com.enterprise.regulatory.service.AuditService;
+import com.enterprise.regulatory.service.RequestUpdateService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,11 +30,11 @@ import java.util.Map;
 public class ComplianceCheckWorker implements ExternalTaskHandler {
     
     private static final String TOPIC_NAME = "compliance-check";
-    private static final int MAX_RETRIES = 3;
     private static final long RETRY_TIMEOUT = 10000L;
     
     private final ExternalTaskClient externalTaskClient;
     private final AuditService auditService;
+    private final RequestUpdateService requestUpdateService;
     private TopicSubscription subscription;
     
     @EventListener(ApplicationReadyEvent.class)
@@ -99,6 +100,17 @@ public class ComplianceCheckWorker implements ExternalTaskHandler {
                 variables.put("complianceComment", "Requires manual compliance review");
             }
             
+            String comment = (String) variables.get("complianceComment");
+            requestUpdateService.update(requestId, request -> {
+                request.setComplianceResult(result);
+                request.setComplianceComment(comment);
+                request.setCurrentStage(switch (result) {
+                    case PASS -> "FINAL_APPROVAL";
+                    case FAIL -> "COMPLETED";
+                    case REQUIRES_ADDITIONAL_INFO -> "COMPLIANCE_REVIEW";
+                });
+            });
+            
             externalTaskService.complete(externalTask, variables);
             log.info("Compliance check completed for request: {} with result: {}", requestId, result);
             
@@ -158,22 +170,19 @@ public class ComplianceCheckWorker implements ExternalTaskHandler {
     }
     
     private void handleFailure(ExternalTask externalTask, ExternalTaskService externalTaskService, Exception e) {
-        int retries = externalTask.getRetries() != null ? externalTask.getRetries() : MAX_RETRIES;
-        
-        if (retries > 0) {
-            log.warn("Retrying compliance check, remaining retries: {}", retries - 1);
-            externalTaskService.handleFailure(
-                externalTask,
-                "Compliance check failed: " + e.getMessage(),
-                e.getClass().getName(),
-                retries - 1,
-                RETRY_TIMEOUT);
+        // Critical: no fallback. After the last attempt (0 retries left) Camunda raises an
+        // incident, which an operator can retry from Cockpit.
+        int remaining = WorkerRetries.remainingAfterFailure(externalTask);
+        if (remaining > 0) {
+            log.warn("Retrying compliance check, remaining retries: {}", remaining);
         } else {
-            log.error("Max retries exceeded for compliance check, creating incident");
-            externalTaskService.handleBpmnError(
-                externalTask,
-                "COMPLIANCE_ERROR",
-                "Compliance check failed after max retries: " + e.getMessage());
+            log.error("Compliance check failed on the last attempt; raising an incident");
         }
+        externalTaskService.handleFailure(
+            externalTask,
+            "Compliance check failed: " + e.getMessage(),
+            e.getClass().getName(),
+            remaining,
+            RETRY_TIMEOUT);
     }
 }

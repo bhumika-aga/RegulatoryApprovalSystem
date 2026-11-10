@@ -36,10 +36,10 @@
       "disabled": true
     },
     {
-      "label": "Compliance Notes",
+      "label": "Automated Check Notes",
       "type": "textarea",
-      "id": "complianceNotes",
-      "key": "complianceNotes",
+      "id": "complianceComment",
+      "key": "complianceComment",
       "disabled": true
     },
     {

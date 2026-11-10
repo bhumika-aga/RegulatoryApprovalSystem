@@ -24,12 +24,12 @@ process model declarative and lets the business logic fail, retry, and scale ind
 ```txt
 Submit ─▶ Risk Scoring ─▶ Initial Review ─▶ Manager Approval ─▶ Compliance Check ─▶ Final Approval ─▶ Complete
          (automated)       (REVIEWER)         (MANAGER)          (automated)         (ADMIN /          (automated)
-                              8h SLA            24h SLA           48h SLA             SENIOR_MANAGER)
-                                │                  │                  │              8h SLA
-                                ▼                  ▼                  ▼                 │
-                           Escalate to        Escalate to       Manual Review          ▼
-                            Manager          Senior Manager    (COMPLIANCE, if      Escalate to
-                                                                 ambiguous)            Admin
+                              8h SLA            24h SLA               │               SENIOR_MANAGER)
+                                │                  │                  ▼              8h SLA
+                                ▼                  ▼            Manual Review           │
+                           Escalate to        Escalate to       (COMPLIANCE, if         ▼
+                            Manager          Senior Manager      ambiguous)          Escalate to
+                                                                 48h SLA ─▶ Admin       Admin
 ```
 
 Each human stage can **APPROVE**, **REJECT**, or branch (the reviewer may request more information; the manager may
@@ -46,14 +46,18 @@ The process model defines the sequence of user tasks, service tasks, gateways, t
 
 - **User tasks** (`Initial Review`, `Manager Approval`, `Senior Manager Review`, `Compliance Manual Review`,
   `Final Approval`, `Provide Additional Information`) are assigned to **candidate groups** that map directly to JWT
-  roles. They are driven through the REST API and rendered with Camunda Forms (`*.form` under `resources/bpmn/`).
+  roles. They are driven through the REST API. Each also has a Camunda Form (`*.form` under `resources/bpmn/`) whose
+  fields match the process variables; with Tasklist closed, the forms document each step's inputs rather than being
+  rendered.
 - **Service tasks** are implemented as **external tasks** (`camunda:type="external"`). The engine publishes work to a
   _topic_; a worker locks, executes and completes it. No business code runs inside the engine.
 - **Exclusive gateways** route on process variables set when a task completes — e.g.
   `${reviewerDecision == 'APPROVED'}`,
   `${managerDecision == 'ESCALATE'}`, `${complianceResult == 'PASS'}`.
-- **Non-cancelling boundary timers** enforce SLAs (`PT8H`, `PT24H`, `PT48H`, `PT8H`). When a timer fires it spawns a
-  parallel escalation branch (escalate + notify) **without** cancelling the still-pending human task.
+- **Non-cancelling boundary timers** on the human tasks enforce SLAs (`PT8H`, `PT24H`, `PT48H`, `PT8H`). When a timer
+  fires it spawns a parallel escalation branch (escalate + notify) **without** cancelling the still-pending task: the
+  escalation target's role becomes a candidate for the task and any claim on it is released, so the target can pick it
+  up (the original role still can too).
 
 ### 2. External Task Workers
 
@@ -63,7 +67,7 @@ Five workers, one per topic, each implementing `ExternalTaskHandler` and subscri
 | :------------------------- | :--------------------- | :----------------------------------------------------------------------------- |
 | `RiskScoringWorker`        | `risk-scoring`         | Scores 0–100 from request type + department, categorises (MINIMAL→CRITICAL)    |
 | `ComplianceCheckWorker`    | `compliance-check`     | Automated regulatory validation → `PASS` / `FAIL` / `REQUIRES_ADDITIONAL_INFO` |
-| `EscalationWorker`         | `escalation-handler`   | Records SLA breach, flags the request as escalated, writes audit events        |
+| `EscalationWorker`         | `escalation-handler`   | Hands the overdue task to the escalation target, flags the request, audits it  |
 | `WorkflowCompletionWorker` | `workflow-completion`  | Finalises request status (`APPROVED` / `REJECTED`) and completion audit        |
 | `NotificationWorker`       | `notification-service` | Sends approval / rejection / escalation notifications (logged by default)      |
 
@@ -73,14 +77,14 @@ all topics.
 
 ### 3. Resilience & fallbacks
 
-Every worker wraps its logic in try/catch and degrades deliberately on failure. Retries decrement on each attempt with a
+Every worker wraps its logic in try/catch and degrades deliberately on failure. Each task gets three attempts with a
 fixed back-off; the polling client itself uses an exponential back-off (`500ms × 2, capped at 10s`) when no work is
-available. On exhausting retries each worker applies a fallback suited to how critical it is:
+available. If the last attempt fails, each worker applies a fallback suited to how critical it is:
 
 - **Risk scoring** — non-blocking: falls back to a default score of `50` / `MEDIUM` and completes, so review is never
   blocked by the scoring engine.
-- **Compliance / Completion** — critical: raise a **BPMN error** (`COMPLIANCE_ERROR` / `COMPLETION_ERROR`) which creates
-  an incident for manual intervention rather than silently passing.
+- **Compliance / Completion** — critical: no fallback. The task's retries run out and Camunda raises an **incident**,
+  which an operator can retry from Cockpit, rather than silently passing.
 - **Escalation / Notification** — best-effort: complete with an error flag so a failed notification never blocks the
   business process.
 
@@ -118,8 +122,8 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 
 **Surface hardening.** Only what has to be public is public:
 
-- `/actuator/health` is anonymous (platform health check); all other actuator endpoints require authentication, and
-  health details are shown only to authenticated callers.
+- `/actuator/health` is anonymous (platform health check); the other actuator endpoints (`info`, `metrics`) need an
+  `ADMIN` token, and health details are shown only to authenticated callers.
 - The Camunda webapp (`/camunda/**`) is protected by Camunda's own login — only the configured `admin` user exists.
   Tasklist and the webapp's task-completion endpoints are closed, so tasks are completed only through the API, with its
   role and separation-of-duties checks. Camunda's own lock on a user after failed logins is off — it let anyone keep
@@ -142,10 +146,12 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 ### 5. Audit trail
 
 Every meaningful event is persisted to the `workflow_audit` table via `AuditService` (written **asynchronously** with
-`@Async` so auditing never slows the request path):
+`@Async` so auditing never slows the request path; when the async pool is saturated the caller writes the record
+itself, so no event is dropped):
 
-- **Workflow events** — `WORKFLOW_STARTED` / `WORKFLOW_COMPLETED` / `WORKFLOW_TERMINATED` via execution listeners and
-  the completion worker.
+- **Workflow events** — `WORKFLOW_STARTED` / `WORKFLOW_COMPLETED` / `WORKFLOW_TERMINATED` via execution listeners
+  (`WORKFLOW_COMPLETED` once, when the process reaches its end event); the completion worker records the final
+  `DECISION_MADE`.
 - **Task events** — `TASK_CREATED` / `TASK_CLAIMED` / `TASK_COMPLETED` and `DECISION_MADE` via `TaskAuditListener`.
 - **Compliance & SLA** — `COMPLIANCE_CHECK_PASSED/FAILED`, `SLA_BREACH`, `TASK_ESCALATED` from the workers.
 
@@ -218,8 +224,17 @@ Base path: `/api/v1`. All endpoints except auth, health and the API docs require
 | `POST /tasks/{taskId}/complete`             | authenticated                  | Complete with a decision               |
 | `GET  /audit/**`                            | AUDITOR, ADMIN, COMPLIANCE     | Audit trail queries                    |
 
-`complete` accepts a `decision` of `APPROVED`, `REJECTED`, `NEEDS_INFO`, `ESCALATE`, `PASS` or `FAIL` (validated)
-and an optional `comment`; any other properties are ignored.
+`complete` accepts a `decision` and an optional `comment`; any other properties are ignored. The decision must be one
+the task's next step can route, otherwise the call is refused with **400**:
+
+| Task                           | Decisions                            |
+| :----------------------------- | :----------------------------------- |
+| Initial Review                 | `APPROVED`, `REJECTED`, `NEEDS_INFO` |
+| Provide Additional Information | `APPROVED` (submit the information)  |
+| Manager Approval               | `APPROVED`, `REJECTED`, `ESCALATE`   |
+| Senior Manager Review          | `APPROVED`, `REJECTED`               |
+| Compliance Manual Review       | `PASS`, `FAIL`                       |
+| Final Approval                 | `APPROVED`, `REJECTED`               |
 
 ### Testing the API
 
@@ -259,11 +274,14 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html` when AP
 
 - **`AuthUserServiceTest`** — unit tests for credential verification (BCrypt match, unknown user, case-insensitive
   lookup).
+- **`WorkerFailureHandlingTest`**, **`ReviewStepRoutingTest`** — worker retries and last-attempt fallbacks, and which
+  decisions each task accepts and the stage each leads to.
 - **`JwtTokenProviderTest`**, **`JwtAuthenticationFilterTest`**, **`LoginAttemptLimiterTest`**,
   **`ClientAddressResolverTest`**, **`LocalOnlyFilterTest`** — key validation and token types, clearing the Camunda
   identity after each request, login rate limiting and client addresses, and the engine REST API's local-only access.
 - **`SecurityAuthorizationIntegrationTest`** — full-stack tests over real HTTP covering the auth matrix (400/401/200,
-  refresh preserving roles, server-controlled roles, token types, API and Cockpit login rate limiting), the exposed surface (engine REST API, Tasklist, API
+  refresh preserving roles, server-controlled roles, token types, API and Cockpit login rate limiting), client errors (4xx, not 500), decision validation, request stages, the audit
+trail, SLA escalation, the exposed surface (engine REST API, Tasklist, API
 docs), **task-level authorization** (a role can only complete tasks its
   candidate group owns), and **read scoping** (a user cannot read another user's workflow/tasks unless they hold an
   oversight role).

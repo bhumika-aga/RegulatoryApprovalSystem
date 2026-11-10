@@ -85,8 +85,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getServletPath();
+        // Actuator requests are filtered: metrics and info need an (ADMIN) token.
         return path.startsWith("/api/v1/auth/") ||
-                   path.startsWith("/actuator/") ||
                    path.startsWith("/swagger-ui/") ||
                    path.startsWith("/v3/api-docs") ||
                    path.startsWith("/camunda/") ||

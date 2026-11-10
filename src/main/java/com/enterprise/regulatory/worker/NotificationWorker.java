@@ -27,7 +27,6 @@ import java.util.Map;
 public class NotificationWorker implements ExternalTaskHandler {
     
     private static final String TOPIC_NAME = "notification-service";
-    private static final int MAX_RETRIES = 3;
     private static final long RETRY_TIMEOUT = 5000L;
     
     private final ExternalTaskClient externalTaskClient;
@@ -151,19 +150,19 @@ public class NotificationWorker implements ExternalTaskHandler {
     }
     
     private void handleFailure(ExternalTask externalTask, ExternalTaskService externalTaskService, Exception e) {
-        int retries = externalTask.getRetries() != null ? externalTask.getRetries() : MAX_RETRIES;
+        int remaining = WorkerRetries.remainingAfterFailure(externalTask);
         
-        if (retries > 0) {
-            log.warn("Retrying notification, remaining retries: {}", retries - 1);
+        if (remaining > 0) {
+            log.warn("Retrying notification, remaining retries: {}", remaining);
             externalTaskService.handleFailure(
                 externalTask,
                 "Notification failed: " + e.getMessage(),
                 e.getClass().getName(),
-                retries - 1,
+                remaining,
                 RETRY_TIMEOUT);
         } else {
-            // For notifications, we complete even on failure to not block the workflow
-            log.warn("Max retries exceeded for notification, completing with failure flag");
+            // Best-effort: complete even on failure so a notification never blocks the workflow
+            log.warn("Notification failed on the last attempt, completing with failure flag");
             Map<String, Object> variables = new HashMap<>();
             variables.put("notificationSent", false);
             variables.put("notificationError", e.getMessage());

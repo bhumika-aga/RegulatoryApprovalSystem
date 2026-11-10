@@ -60,9 +60,9 @@ public class SecurityConfig {
                     // Public endpoints
                     .requestMatchers("/api/v1/auth/**").permitAll()
                     // Health probe stays public for the platform (Render) health check;
-                    // all other actuator endpoints (metrics, info, ...) require authentication.
+                    // all other actuator endpoints (metrics, info, ...) are for admins.
                     .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
-                    .requestMatchers("/actuator/**").authenticated()
+                    .requestMatchers("/actuator/**").hasRole("ADMIN")
                     // API docs: served only when enabled (API_DOCS_ENABLED or the dev profile).
                     .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                         "/v3/api-docs/**")

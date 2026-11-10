@@ -200,6 +200,7 @@ public class WorkflowService {
                                           .currentAssignee(request.getCurrentAssignee())
                                           .submitterId(request.getSubmitterId())
                                           .riskScore(request.getRiskScore())
+                                          .complianceResult(request.getComplianceResult())
                                           .escalated(request.getEscalated())
                                           .escalationReason(request.getEscalationReason())
                                           .rejectionReason(request.getRejectionReason())

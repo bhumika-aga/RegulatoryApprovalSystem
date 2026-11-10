@@ -3,8 +3,9 @@ package com.enterprise.regulatory.worker;
 import com.enterprise.regulatory.model.entity.RegulatoryRequest;
 import com.enterprise.regulatory.model.enums.ApprovalStatus;
 import com.enterprise.regulatory.model.enums.AuditEventType;
-import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
+import com.enterprise.regulatory.model.enums.ComplianceResult;
 import com.enterprise.regulatory.service.AuditService;
+import com.enterprise.regulatory.service.RequestUpdateService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,13 +18,10 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
 
 /**
  * External Task Worker for handling workflow completion.
@@ -35,11 +33,10 @@ import java.util.UUID;
 public class WorkflowCompletionWorker implements ExternalTaskHandler {
     
     private static final String TOPIC_NAME = "workflow-completion";
-    private static final int MAX_RETRIES = 3;
     private static final long RETRY_TIMEOUT = 5000L;
     
     private final ExternalTaskClient externalTaskClient;
-    private final RegulatoryRequestRepository requestRepository;
+    private final RequestUpdateService requestUpdateService;
     private final AuditService auditService;
     private TopicSubscription subscription;
     
@@ -61,7 +58,6 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
     }
     
     @Override
-    @Transactional
     public void execute(ExternalTask externalTask, ExternalTaskService externalTaskService) {
         String processInstanceId = externalTask.getProcessInstanceId();
         String outcome = externalTask.getVariable("outcome");
@@ -76,9 +72,9 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
             // Update the regulatory request
             updateRequestCompletion(requestId, finalStatus);
             
-            // Record audit events
-            recordCompletionAuditEvents(processInstanceId, externalTask.getId(),
-                isApproved, finalStatus, outcome);
+            // Record the final decision. WORKFLOW_COMPLETED is recorded once, by
+            // WorkflowEndListener, when the process actually reaches its end event.
+            recordFinalDecision(processInstanceId, externalTask.getId(), outcome);
             
             // Set output variables
             Map<String, Object> variables = new HashMap<>();
@@ -96,54 +92,24 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
     }
     
     private void updateRequestCompletion(String requestId, ApprovalStatus status) {
-        if (requestId == null) {
-            log.warn("No requestId provided for completion update");
-            return;
-        }
-        
-        try {
-            UUID uuid = UUID.fromString(requestId);
-            requestRepository.findById(Objects.requireNonNull(uuid)).ifPresent(request -> {
-                // The overall outcome is captured by the status; the stage-specific
-                // decision fields (e.g. finalDecision) are owned by the user tasks and
-                // must not be overwritten here, otherwise the rejection reason would
-                // misattribute the rejection to the Final Approval stage.
-                if (status == ApprovalStatus.REJECTED && request.getRejectionReason() == null) {
-                    request.setRejectionReason(buildRejectionReason(request));
-                }
-                
-                request.setStatus(status);
-                request.setCompletedAt(LocalDateTime.now());
-                request.setCurrentStage("COMPLETED");
-                request.setCurrentAssignee(null);
-                
-                requestRepository.save(request);
-                log.debug("Updated regulatory request with completion status: {}", status);
-            });
-        } catch (IllegalArgumentException e) {
-            log.warn("Could not parse requestId as UUID: {}", requestId);
-        }
+        requestUpdateService.update(requestId, request -> {
+            // The overall outcome is captured by the status; the stage-specific
+            // decision fields (e.g. finalDecision) are owned by the user tasks and
+            // must not be overwritten here, otherwise the rejection reason would
+            // misattribute the rejection to the Final Approval stage.
+            if (status == ApprovalStatus.REJECTED && request.getRejectionReason() == null) {
+                request.setRejectionReason(buildRejectionReason(request));
+            }
+            
+            request.setStatus(status);
+            request.setCompletedAt(LocalDateTime.now());
+            request.setCurrentStage("COMPLETED");
+            request.setCurrentAssignee(null);
+            log.debug("Updated regulatory request with completion status: {}", status);
+        });
     }
     
-    private void recordCompletionAuditEvents(String processInstanceId, String taskId,
-                                             boolean isApproved, ApprovalStatus finalStatus, String outcome) {
-        String comment = isApproved
-                             ? "Regulatory request approved and workflow completed successfully"
-                             : "Regulatory request rejected. See rejection reason for details.";
-        
-        // Record workflow completion event
-        auditService.recordAuditEvent(
-            processInstanceId,
-            taskId,
-            "Workflow Completion",
-            AuditEventType.WORKFLOW_COMPLETED,
-            null,
-            finalStatus.name(),
-            "system",
-            null,
-            comment);
-        
-        // Record final decision event
+    private void recordFinalDecision(String processInstanceId, String taskId, String outcome) {
         auditService.recordAuditEvent(
             processInstanceId,
             taskId,
@@ -173,7 +139,14 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
             }
         }
         
-        if (request.getComplianceResult() != null && "FAIL".equals(request.getComplianceResult().name())) {
+        if (request.getSeniorManagerDecision() != null && "REJECTED".equals(request.getSeniorManagerDecision())) {
+            reason.append("Rejected at Senior Manager Review stage. ");
+            if (request.getSeniorManagerComment() != null) {
+                reason.append("Senior manager comment: ").append(request.getSeniorManagerComment()).append(". ");
+            }
+        }
+        
+        if (request.getComplianceResult() == ComplianceResult.FAIL) {
             reason.append("Failed compliance check. ");
             if (request.getComplianceComment() != null) {
                 reason.append("Compliance comment: ").append(request.getComplianceComment()).append(". ");
@@ -191,23 +164,19 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
     }
     
     private void handleFailure(ExternalTask externalTask, ExternalTaskService externalTaskService, Exception e) {
-        int retries = externalTask.getRetries() != null ? externalTask.getRetries() : MAX_RETRIES;
-        
-        if (retries > 0) {
-            log.warn("Retrying workflow completion, remaining retries: {}", retries - 1);
-            externalTaskService.handleFailure(
-                externalTask,
-                "Workflow completion failed: " + e.getMessage(),
-                e.getClass().getName(),
-                retries - 1,
-                RETRY_TIMEOUT);
+        // Critical: no fallback. After the last attempt (0 retries left) Camunda raises an
+        // incident, which an operator can retry from Cockpit.
+        int remaining = WorkerRetries.remainingAfterFailure(externalTask);
+        if (remaining > 0) {
+            log.warn("Retrying workflow completion, remaining retries: {}", remaining);
         } else {
-            // Complete with error flag - this is critical, so we report failure
-            log.error("Max retries exceeded for workflow completion, creating incident");
-            externalTaskService.handleBpmnError(
-                externalTask,
-                "COMPLETION_ERROR",
-                "Workflow completion failed after max retries: " + e.getMessage());
+            log.error("Workflow completion failed on the last attempt; raising an incident");
         }
+        externalTaskService.handleFailure(
+            externalTask,
+            "Workflow completion failed: " + e.getMessage(),
+            e.getClass().getName(),
+            remaining,
+            RETRY_TIMEOUT);
     }
 }

@@ -1,7 +1,7 @@
 package com.enterprise.regulatory.worker;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
-import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
+import com.enterprise.regulatory.service.RequestUpdateService;
 import com.enterprise.regulatory.service.AuditService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -11,21 +11,24 @@ import org.camunda.bpm.client.task.ExternalTask;
 import org.camunda.bpm.client.task.ExternalTaskHandler;
 import org.camunda.bpm.client.task.ExternalTaskService;
 import org.camunda.bpm.client.topic.TopicSubscription;
+import org.camunda.bpm.engine.TaskService;
+import org.camunda.bpm.engine.task.Task;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
 
 /**
  * External Task Worker for handling task escalations on SLA breach.
- * Marks the request as escalated and records audit events.
+ *
+ * <p>Reassigns the overdue user task ({@code escalatedTaskKey}) to the escalation target: the
+ * target role becomes a candidate group and any current claim is released, so the target can
+ * claim and complete it (the original group still can too). Also marks the request as
+ * escalated and records audit events.
  */
 @Component
 @RequiredArgsConstructor
@@ -33,12 +36,12 @@ import java.util.UUID;
 public class EscalationWorker implements ExternalTaskHandler {
     
     private static final String TOPIC_NAME = "escalation-handler";
-    private static final int MAX_RETRIES = 3;
     private static final long RETRY_TIMEOUT = 5000L;
     
     private final ExternalTaskClient externalTaskClient;
-    private final RegulatoryRequestRepository requestRepository;
+    private final RequestUpdateService requestUpdateService;
     private final AuditService auditService;
+    private final TaskService taskService;
     private TopicSubscription subscription;
     
     @EventListener(ApplicationReadyEvent.class)
@@ -59,17 +62,22 @@ public class EscalationWorker implements ExternalTaskHandler {
     }
     
     @Override
-    @Transactional
     public void execute(ExternalTask externalTask, ExternalTaskService externalTaskService) {
         String processInstanceId = externalTask.getProcessInstanceId();
         String escalationTarget = externalTask.getVariable("escalationTarget");
         String originalTask = externalTask.getVariable("originalTask");
         String requestId = externalTask.getVariable("requestId");
+        String escalatedTaskKey = externalTask.getVariable("escalatedTaskKey");
         
         log.warn("SLA BREACH - Escalating task {} to {} for process: {}",
             originalTask, escalationTarget, processInstanceId);
         
         try {
+            if (!reassign(processInstanceId, escalatedTaskKey, escalationTarget)) {
+                log.info("Task {} of process {} is no longer open; nothing to escalate",
+                    escalatedTaskKey, processInstanceId);
+            }
+            
             // Update the regulatory request with escalation info
             updateRequestEscalation(requestId, escalationTarget, originalTask);
             
@@ -94,24 +102,40 @@ public class EscalationWorker implements ExternalTaskHandler {
         }
     }
     
+    /**
+     * Makes the escalation target a candidate for the open task and releases any claim on it.
+     *
+     * @return {@code false} if the task has already been completed
+     */
+    private boolean reassign(String processInstanceId, String taskKey, String escalationTarget) {
+        Task task = taskService.createTaskQuery()
+                        .processInstanceId(processInstanceId)
+                        .taskDefinitionKey(taskKey)
+                        .active()
+                        .singleResult();
+        if (task == null) {
+            return false;
+        }
+        boolean alreadyCandidate = taskService.getIdentityLinksForTask(task.getId()).stream()
+                                       .anyMatch(link -> "candidate".equals(link.getType())
+                                                             && escalationTarget.equals(link.getGroupId()));
+        if (!alreadyCandidate) {
+            taskService.addCandidateGroup(task.getId(), escalationTarget);
+        }
+        if (task.getAssignee() != null) {
+            taskService.setAssignee(task.getId(), null);
+        }
+        log.info("Escalated task {} ({}) to {}", task.getName(), task.getId(), escalationTarget);
+        return true;
+    }
+    
     private void updateRequestEscalation(String requestId, String escalationTarget, String originalTask) {
-        if (requestId == null) {
-            log.warn("No requestId provided for escalation update");
-            return;
-        }
-        
-        try {
-            UUID uuid = UUID.fromString(requestId);
-            requestRepository.findById(Objects.requireNonNull(uuid)).ifPresent(request -> {
-                request.setEscalated(true);
-                request.setEscalatedAt(LocalDateTime.now());
-                request.setEscalationReason("SLA breach on " + originalTask + " - escalated to " + escalationTarget);
-                requestRepository.save(request);
-                log.debug("Updated regulatory request with escalation info");
-            });
-        } catch (IllegalArgumentException e) {
-            log.warn("Could not parse requestId as UUID: {}", requestId);
-        }
+        requestUpdateService.update(requestId, request -> {
+            request.setEscalated(true);
+            request.setEscalatedAt(LocalDateTime.now());
+            request.setEscalationReason("SLA breach on " + originalTask + " - escalated to " + escalationTarget);
+            request.setCurrentAssignee(null);
+        });
     }
     
     private void recordEscalationAuditEvents(String processInstanceId, String taskId,
@@ -151,19 +175,19 @@ public class EscalationWorker implements ExternalTaskHandler {
     }
     
     private void handleFailure(ExternalTask externalTask, ExternalTaskService externalTaskService, Exception e) {
-        int retries = externalTask.getRetries() != null ? externalTask.getRetries() : MAX_RETRIES;
+        int remaining = WorkerRetries.remainingAfterFailure(externalTask);
         
-        if (retries > 0) {
-            log.warn("Retrying escalation handling, remaining retries: {}", retries - 1);
+        if (remaining > 0) {
+            log.warn("Retrying escalation handling, remaining retries: {}", remaining);
             externalTaskService.handleFailure(
                 externalTask,
                 "Escalation handling failed: " + e.getMessage(),
                 e.getClass().getName(),
-                retries - 1,
+                remaining,
                 RETRY_TIMEOUT);
         } else {
-            // Complete with error flag to not block the workflow
-            log.error("Max retries exceeded for escalation handling, completing with error");
+            // Best-effort: complete with an error flag so a failed escalation never blocks the workflow
+            log.error("Escalation handling failed on the last attempt, completing with error");
             Map<String, Object> variables = new HashMap<>();
             variables.put("escalated", true);
             variables.put("escalationError", e.getMessage());

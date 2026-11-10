@@ -3,6 +3,8 @@ package com.enterprise.regulatory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.camunda.bpm.engine.ManagementService;
+import org.camunda.bpm.engine.runtime.Job;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -54,6 +56,9 @@ class SecurityAuthorizationIntegrationTest {
     
     @Autowired
     private ObjectMapper mapper;
+    
+    @Autowired
+    private ManagementService managementService;
     
     // ---------------------------------------------------------------- Authentication
     
@@ -280,6 +285,124 @@ class SecurityAuthorizationIntegrationTest {
                        .getStatusCode().value()).isEqualTo(200);
     }
     
+    // ---------------------------------------------------------------- Client errors
+    
+    @Test
+    void clientErrorsGetTheirOwnStatusNot500() {
+        HttpHeaders json = new HttpHeaders();
+        json.setContentType(MediaType.APPLICATION_JSON);
+        // Malformed JSON
+        assertThat(rest.exchange(url("/api/v1/auth/token"), HttpMethod.POST,
+            new HttpEntity<>("{not json", json), String.class).getStatusCode().value()).isEqualTo(400);
+        // Missing required header
+        assertThat(rest.exchange(url("/api/v1/auth/refresh"), HttpMethod.POST,
+            HttpEntity.EMPTY, String.class).getStatusCode().value()).isEqualTo(400);
+        // Wrong method
+        assertThat(call(HttpMethod.GET, "/api/v1/auth/token", null, null).getStatusCode().value()).isEqualTo(405);
+        // Unsupported media type
+        HttpHeaders text = new HttpHeaders();
+        text.setContentType(MediaType.TEXT_PLAIN);
+        assertThat(rest.exchange(url("/api/v1/auth/token"), HttpMethod.POST,
+            new HttpEntity<>("admin", text), String.class).getStatusCode().value()).isEqualTo(415);
+    }
+    
+    // ---------------------------------------------------------------- Decisions, stages, audit
+    
+    @Test
+    void refusesADecisionTheTaskCannotRoute() {
+        String admin = login("admin");
+        String reviewer = login("reviewer");
+        String pid = startWorkflow(admin, "Unroutable decision");
+        String initialReview = awaitTask(reviewer, pid, "Task_InitialReview");
+        
+        ResponseEntity<String> res = call(HttpMethod.POST, "/api/v1/tasks/" + initialReview + "/complete", reviewer,
+            Map.of("decision", "ESCALATE"));
+        assertThat(res.getStatusCode().value()).isEqualTo(400);
+        assertThat(res.getBody()).contains("APPROVED", "REJECTED", "NEEDS_INFO");
+        // The task is still open and can be completed with a valid decision.
+        assertThat(complete(reviewer, initialReview).getStatusCode().value()).isEqualTo(200);
+    }
+    
+    @Test
+    void stageFollowsTheDecisionAndCompletionIsAuditedOnce() {
+        String admin = login("admin");
+        String reviewer = login("reviewer");
+        String auditor = login("auditor");
+        String pid = startWorkflow(admin, "Rejected at initial review");
+        
+        assertThat(call(HttpMethod.POST, "/api/v1/tasks/" + awaitTask(reviewer, pid, "Task_InitialReview")
+                                             + "/complete", reviewer, Map.of("decision", "REJECTED"))
+                       .getStatusCode().value()).isEqualTo(200);
+        
+        JsonNode status = awaitWorkflow(admin, pid, w -> "REJECTED".equals(w.path("status").asText()));
+        assertThat(status.path("currentStage").asText()).isEqualTo("COMPLETED");
+        assertThat(status.path("rejectionReason").asText()).contains("Initial Review");
+        
+        awaitAuditEvent(auditor, pid, "WORKFLOW_COMPLETED", null);
+        sleep(1000); // let any late asynchronous audit writes land
+        assertThat(auditEvents(auditor, pid, "WORKFLOW_COMPLETED", null)).hasSize(1);
+    }
+    
+    @Test
+    void seniorManagerDecisionIsAuditedAndComplianceResultRecorded() {
+        String admin = login("admin");
+        String reviewer = login("reviewer");
+        String manager = login("manager");
+        String seniorManager = login("senior.manager");
+        String auditor = login("auditor");
+        String pid = startWorkflow(admin, "Escalated to senior manager");
+        
+        complete(reviewer, awaitTask(reviewer, pid, "Task_InitialReview"));
+        assertThat(call(HttpMethod.POST, "/api/v1/tasks/" + awaitTask(manager, pid, "Task_ManagerApproval")
+                                             + "/complete", manager, Map.of("decision", "ESCALATE"))
+                       .getStatusCode().value()).isEqualTo(200);
+        assertThat(awaitWorkflow(admin, pid, w -> true).path("currentStage").asText())
+            .isEqualTo("SENIOR_MANAGER_REVIEW");
+        complete(seniorManager, awaitTask(seniorManager, pid, "Task_SeniorManagerReview"));
+        
+        // The audit shows the senior manager's own decision, not the manager's ESCALATE.
+        JsonNode decision = awaitAuditEvent(auditor, pid, "DECISION_MADE", "Senior Manager Review");
+        assertThat(decision.path("newValue").asText()).isEqualTo("APPROVED");
+        assertThat(decision.path("role").asText()).isEqualTo("SENIOR_MANAGER");
+        
+        // The automated compliance check records its result on the request.
+        JsonNode workflow = awaitWorkflow(admin, pid, w -> !w.path("complianceResult").isMissingNode()
+                                                               && !w.path("complianceResult").isNull());
+        assertThat(workflow.path("complianceResult").asText()).isIn("PASS", "FAIL", "REQUIRES_ADDITIONAL_INFO");
+    }
+    
+    @Test
+    void slaEscalationHandsTheTaskToTheEscalationTarget() {
+        String admin = login("admin");
+        String reviewer = login("reviewer");
+        String manager = login("manager");
+        String pid = startWorkflow(admin, "SLA breach");
+        String initialReview = awaitTask(reviewer, pid, "Task_InitialReview");
+        // The reviewer claims it, then sits on it past the 8-hour SLA.
+        assertThat(call(HttpMethod.POST, "/api/v1/tasks/" + initialReview + "/claim", reviewer, null)
+                       .getStatusCode().value()).isEqualTo(200);
+        
+        Job slaTimer = managementService.createJobQuery().processInstanceId(pid).timers().singleResult();
+        managementService.executeJob(slaTimer.getId());
+        
+        // Escalated to MANAGER: the claim is released and a manager can now complete it.
+        assertThat(awaitTask(manager, pid, "Task_InitialReview")).isEqualTo(initialReview);
+        assertThat(complete(manager, initialReview).getStatusCode().value()).isEqualTo(200);
+        assertThat(awaitWorkflow(admin, pid, w -> w.path("escalated").asBoolean()).path("escalationReason").asText())
+            .contains("MANAGER");
+    }
+    
+    // ---------------------------------------------------------------- Actuator
+    
+    @Test
+    void metricsNeedAnAdminToken() {
+        assertThat(call(HttpMethod.GET, "/actuator/metrics", null, null).getStatusCode().value()).isEqualTo(401);
+        assertThat(call(HttpMethod.GET, "/actuator/metrics", login("reviewer"), null).getStatusCode().value())
+            .isEqualTo(403);
+        assertThat(call(HttpMethod.GET, "/actuator/metrics", login("admin"), null).getStatusCode().value())
+            .isEqualTo(200);
+    }
+    
     // ---------------------------------------------------------------- Helpers
     
     private String login(String username) {
@@ -388,6 +511,48 @@ class SecurityAuthorizationIntegrationTest {
         headers.set(CLIENT_HEADER, clientAddress);
         return rest.exchange(url("/camunda/api/admin/auth/user/default/login/cockpit"), HttpMethod.POST,
             new HttpEntity<>("username=admin&password=" + password, headers), String.class);
+    }
+    
+    private JsonNode awaitWorkflow(String token, String processInstanceId,
+                                   java.util.function.Predicate<JsonNode> condition) {
+        long deadline = System.currentTimeMillis() + 30_000L;
+        JsonNode last = null;
+        while (System.currentTimeMillis() < deadline) {
+            last = json(call(HttpMethod.GET, "/api/v1/workflow/status/" + processInstanceId, token, null)).get("data");
+            if (last != null && condition.test(last)) {
+                return last;
+            }
+            sleep(500);
+        }
+        throw new AssertionError("Workflow " + processInstanceId + " did not reach the expected state: " + last);
+    }
+    
+    private java.util.List<JsonNode> auditEvents(String token, String processInstanceId, String eventType,
+                                                 String taskName) {
+        java.util.List<JsonNode> events = new java.util.ArrayList<>();
+        JsonNode data = json(call(HttpMethod.GET, "/api/v1/audit/process/" + processInstanceId, token, null))
+                            .get("data");
+        if (data != null) {
+            data.forEach(e -> {
+                if (eventType.equals(e.path("eventType").asText())
+                        && (taskName == null || taskName.equals(e.path("taskName").asText()))) {
+                    events.add(e);
+                }
+            });
+        }
+        return events;
+    }
+    
+    private JsonNode awaitAuditEvent(String token, String processInstanceId, String eventType, String taskName) {
+        long deadline = System.currentTimeMillis() + 30_000L;
+        while (System.currentTimeMillis() < deadline) {
+            java.util.List<JsonNode> events = auditEvents(token, processInstanceId, eventType, taskName);
+            if (!events.isEmpty()) {
+                return events.get(0);
+            }
+            sleep(500);
+        }
+        throw new AssertionError("No " + eventType + " audit event for " + processInstanceId);
     }
     
     private ResponseEntity<String> call(HttpMethod method, String path, String token, Object body) {

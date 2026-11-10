@@ -22,7 +22,7 @@ public class ExternalTaskWorkerConfig {
     @Value("${camunda.bpm.client.base-url:http://localhost:8080/engine-rest}")
     private String camundaBaseUrl;
     
-    @Value("${camunda.bpm.client.async-response-timeout:30000}")
+    @Value("${camunda.bpm.client.async-response-timeout:5000}")
     private long asyncResponseTimeout;
     
     @Value("${camunda.bpm.client.lock-duration:60000}")

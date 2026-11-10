@@ -73,7 +73,9 @@ camunda:
         login-delay-max-time: 0
     client:
       base-url: http://localhost:${server.port}/engine-rest
-      async-response-timeout: 30000
+      # Long-poll window (ms). A poll returns at once when a task is created, so this only
+      # bounds idle polls, and with them how long shutdown waits for the last poll to end.
+      async-response-timeout: 5000
       lock-duration: 60000
       max-tasks: 10
       worker-id: regulatory-worker-${random.uuid}
@@ -149,7 +151,7 @@ springdoc:
 
 # Actuator Configuration
 # Only /actuator/health is publicly reachable (for the platform health check);
-# info and metrics are exposed but require authentication (see SecurityConfig).
+# info and metrics require an ADMIN token (see SecurityConfig).
 # Health details are shown only to authenticated callers, never anonymously.
 management:
   endpoints:

@@ -75,7 +75,13 @@ public class RegulatoryRequest {
     
     @Column(name = "manager_comment", columnDefinition = "TEXT")
     private String managerComment;
-    
+
+    @Column(name = "senior_manager_decision", length = 20)
+    private String seniorManagerDecision;
+
+    @Column(name = "senior_manager_comment", columnDefinition = "TEXT")
+    private String seniorManagerComment;
+
     @Column(name = "compliance_comment", columnDefinition = "TEXT")
     private String complianceComment;
     

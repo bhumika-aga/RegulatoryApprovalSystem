@@ -4,6 +4,8 @@ import com.enterprise.regulatory.dto.request.CompleteTaskRequest;
 import com.enterprise.regulatory.dto.response.TaskResponse;
 import com.enterprise.regulatory.exception.ResourceNotFoundException;
 import com.enterprise.regulatory.exception.TaskOperationException;
+import com.enterprise.regulatory.model.enums.ComplianceResult;
+import com.enterprise.regulatory.model.enums.ReviewStep;
 import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
 import com.enterprise.regulatory.security.SecurityUtils;
 import com.enterprise.regulatory.security.UserPrincipal;
@@ -218,6 +220,16 @@ public class WorkflowTaskService {
         }
         enforceSeparationOfDuties(task, username, "complete");
         
+        // Only decisions the next gateway can route are accepted; any other would fail
+        // inside the engine (no outgoing flow matches).
+        ReviewStep step = ReviewStep.of(task.getTaskDefinitionKey())
+                              .orElseThrow(() -> new TaskOperationException(
+                                  "Task '" + task.getName() + "' cannot be completed through this API"));
+        if (!step.accepts(request.getDecision())) {
+            throw new IllegalArgumentException("Decision '" + request.getDecision() + "' is not valid for task '"
+                                                   + task.getName() + "'; expected one of " + step.decisions());
+        }
+        
         // Auto-claim if not assigned
         if (task.getAssignee() == null) {
             camundaTaskService.claim(taskId, username);
@@ -226,12 +238,12 @@ public class WorkflowTaskService {
         }
         
         try {
-            Map<String, Object> variables = buildCompletionVariables(task, request);
+            Map<String, Object> variables = buildCompletionVariables(step, request);
             
             camundaTaskService.complete(taskId, variables);
             
             // Update regulatory request with decision
-            updateRequestWithDecision(task.getProcessInstanceId(), task.getName(), request);
+            updateRequestWithDecision(task.getProcessInstanceId(), step, request);
             
             log.info("Task {} completed by user: {} with decision: {}", taskId, username, request.getDecision());
         } catch (Exception e) {
@@ -240,48 +252,18 @@ public class WorkflowTaskService {
         }
     }
     
-    private Map<String, Object> buildCompletionVariables(Task task, CompleteTaskRequest request) {
+    private Map<String, Object> buildCompletionVariables(ReviewStep step, CompleteTaskRequest request) {
         Map<String, Object> variables = new HashMap<>();
-        String taskName = task.getName();
-        
-        // Set decision variable based on task
-        if (taskName.contains("Initial Review")) {
-            variables.put("reviewerDecision", request.getDecision());
-            if (request.getComment() != null) {
-                variables.put("reviewerComment", request.getComment());
-            }
-        } else if (taskName.contains("Senior Manager")) {
-            variables.put("seniorManagerDecision", request.getDecision());
-            if (request.getComment() != null) {
-                variables.put("seniorManagerComment", request.getComment());
-            }
-        } else if (taskName.contains("Manager")) {
-            variables.put("managerDecision", request.getDecision());
-            if (request.getComment() != null) {
-                variables.put("managerComment", request.getComment());
-            }
-        } else if (taskName.contains("Compliance")) {
-            variables.put("manualComplianceDecision", request.getDecision());
-            if (request.getComment() != null) {
-                variables.put("complianceComment", request.getComment());
-            }
-        } else if (taskName.contains("Final")) {
-            variables.put("finalDecision", request.getDecision());
-            if (request.getComment() != null) {
-                variables.put("finalComment", request.getComment());
-            }
-        } else if (taskName.contains("Additional Information")) {
-            variables.put("additionalInfoProvided", true);
-            if (request.getComment() != null) {
-                variables.put("additionalInfo", request.getComment());
-            }
+        if (step.decisionVariable() != null) {
+            variables.put(step.decisionVariable(), request.getDecision());
         }
-        
-        // Add task comment
+        if (step == ReviewStep.PROVIDE_INFORMATION) {
+            variables.put("additionalInfoProvided", true);
+        }
         if (request.getComment() != null) {
+            variables.put(step.commentVariable(), request.getComment());
             variables.put("taskComment", request.getComment());
         }
-        
         return variables;
     }
     
@@ -293,34 +275,59 @@ public class WorkflowTaskService {
             });
     }
     
-    private void updateRequestWithDecision(String processInstanceId, String taskName,
+    private void updateRequestWithDecision(String processInstanceId, ReviewStep step,
                                            CompleteTaskRequest request) {
+        String decision = request.getDecision();
+        String comment = request.getComment();
         requestRepository.findByProcessInstanceId(processInstanceId)
             .ifPresent(regulatoryRequest -> {
-                if (taskName.contains("Initial Review")) {
-                    regulatoryRequest.setReviewerDecision(request.getDecision());
-                    regulatoryRequest.setReviewerComment(request.getComment());
-                    regulatoryRequest.setCurrentStage("MANAGER_APPROVAL");
-                } else if (taskName.contains("Senior Manager")) {
-                    regulatoryRequest.setCurrentStage("COMPLIANCE_CHECK");
-                } else if (taskName.contains("Manager")) {
-                    regulatoryRequest.setManagerDecision(request.getDecision());
-                    regulatoryRequest.setManagerComment(request.getComment());
-                    regulatoryRequest.setCurrentStage(
-                        "ESCALATE".equals(request.getDecision()) ? "SENIOR_MANAGER_REVIEW"
-                            : "COMPLIANCE_CHECK");
-                } else if (taskName.contains("Compliance")) {
-                    regulatoryRequest.setComplianceComment(request.getComment());
-                    regulatoryRequest.setCurrentStage("FINAL_APPROVAL");
-                } else if (taskName.contains("Final")) {
-                    regulatoryRequest.setFinalDecision(request.getDecision());
-                    regulatoryRequest.setFinalComment(request.getComment());
-                    regulatoryRequest.setCurrentStage("COMPLETED");
+                switch (step) {
+                    case INITIAL_REVIEW -> {
+                        regulatoryRequest.setReviewerDecision(decision);
+                        regulatoryRequest.setReviewerComment(comment);
+                    }
+                    case MANAGER_APPROVAL -> {
+                        regulatoryRequest.setManagerDecision(decision);
+                        regulatoryRequest.setManagerComment(comment);
+                    }
+                    case SENIOR_MANAGER_REVIEW -> {
+                        regulatoryRequest.setSeniorManagerDecision(decision);
+                        regulatoryRequest.setSeniorManagerComment(comment);
+                    }
+                    case COMPLIANCE_REVIEW -> {
+                        regulatoryRequest.setComplianceResult(ComplianceResult.valueOf(decision));
+                        regulatoryRequest.setComplianceComment(comment);
+                    }
+                    case FINAL_APPROVAL -> {
+                        regulatoryRequest.setFinalDecision(decision);
+                        regulatoryRequest.setFinalComment(comment);
+                    }
+                    case PROVIDE_INFORMATION -> {
+                        // The answer is kept in the process variables and the audit trail.
+                    }
                 }
-                
+                regulatoryRequest.setCurrentStage(nextStage(step, decision));
                 regulatoryRequest.setCurrentAssignee(null);
                 requestRepository.save(regulatoryRequest);
             });
+    }
+    
+    /**
+     * The stage a request moves to after a step, following the process model's routing.
+     * Rejections end the workflow, so they lead to COMPLETED.
+     */
+    static String nextStage(ReviewStep step, String decision) {
+        if ("REJECTED".equals(decision) || "FAIL".equals(decision)) {
+            return "COMPLETED";
+        }
+        return switch (step) {
+            case INITIAL_REVIEW -> "NEEDS_INFO".equals(decision) ? "ADDITIONAL_INFORMATION" : "MANAGER_APPROVAL";
+            case PROVIDE_INFORMATION -> "INITIAL_REVIEW";
+            case MANAGER_APPROVAL -> "ESCALATE".equals(decision) ? "SENIOR_MANAGER_REVIEW" : "COMPLIANCE_CHECK";
+            case SENIOR_MANAGER_REVIEW -> "COMPLIANCE_CHECK";
+            case COMPLIANCE_REVIEW -> "FINAL_APPROVAL";
+            case FINAL_APPROVAL -> "COMPLETED";
+        };
     }
     
     /**
