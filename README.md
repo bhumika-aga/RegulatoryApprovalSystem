@@ -16,7 +16,7 @@ finally approved, and audited end-to-end — with SLA timers escalating any stag
 ## 🚀 Overview
 
 The system orchestrates the approval process with the **External Task Worker pattern**: the workflow engine owns the
-*flow*, while all business logic runs in independent worker components that poll the engine for work. This keeps the
+_flow_, while all business logic runs in independent worker components that poll the engine for work. This keeps the
 process model declarative and lets the business logic fail, retry, and scale independently of the engine.
 
 ### Core flow
@@ -48,7 +48,7 @@ The process model defines the sequence of user tasks, service tasks, gateways, t
   `Final Approval`, `Provide Additional Information`) are assigned to **candidate groups** that map directly to JWT
   roles. They are driven through the REST API and rendered with Camunda Forms (`*.form` under `resources/bpmn/`).
 - **Service tasks** are implemented as **external tasks** (`camunda:type="external"`). The engine publishes work to a
-  *topic*; a worker locks, executes and completes it. No business code runs inside the engine.
+  _topic_; a worker locks, executes and completes it. No business code runs inside the engine.
 - **Exclusive gateways** route on process variables set when a task completes — e.g.
   `${reviewerDecision == 'APPROVED'}`,
   `${managerDecision == 'ESCALATE'}`, `${complianceResult == 'PASS'}`.
@@ -60,7 +60,7 @@ The process model defines the sequence of user tasks, service tasks, gateways, t
 Five workers, one per topic, each implementing `ExternalTaskHandler` and subscribing on `ApplicationReadyEvent`:
 
 | Worker                     | Topic                  | Responsibility                                                                 |
-|:---------------------------|:-----------------------|:-------------------------------------------------------------------------------|
+| :------------------------- | :--------------------- | :----------------------------------------------------------------------------- |
 | `RiskScoringWorker`        | `risk-scoring`         | Scores 0–100 from request type + department, categorises (MINIMAL→CRITICAL)    |
 | `ComplianceCheckWorker`    | `compliance-check`     | Automated regulatory validation → `PASS` / `FAIL` / `REQUIRES_ADDITIONAL_INFO` |
 | `EscalationWorker`         | `escalation-handler`   | Records SLA breach, flags the request as escalated, writes audit events        |
@@ -99,9 +99,18 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 
 - `JwtAuthenticationFilter` validates the token, builds the `UserPrincipal` / authorities, and synchronizes the
   authenticated user id into Camunda's `IdentityService` so the engine can resolve candidate-group task assignment.
-- URL- and method-level authorization (`@PreAuthorize`) enforce role access.
+- URL- and method-level authorization (`@PreAuthorize`) enforce role access; claiming or completing a task also requires
+  the caller's role to be one of the task's candidate groups (or the task to be assigned to them).
+- **Separation of duties** — nobody may claim or complete a review/approval task on a request they submitted, whatever
+  their role (e.g. a manager approving their own submission, or an admin giving Final Approval to their own request).
+  Such tasks are not listed for the submitter and attempts are refused with **403**. The one exception is _Provide
+  Additional Information_, which is assigned to the submitter by design.
+- Completing a task accepts only a decision and a comment; clients cannot set process variables (which drive routing
+  and the automated checks).
 - `JwtAuthenticationEntryPoint` returns a clean **401** when authentication is missing/invalid; `JwtAccessDeniedHandler`
   returns **403** when an authenticated user lacks the required role.
+- **No built-in secrets.** `JWT_SECRET`, `CAMUNDA_ADMIN_PASSWORD` and the API users' passwords must be provided; the
+  application refuses to start without them (and with a JWT key shorter than 64 bytes).
 
 **Surface hardening.** Only what has to be public is public:
 
@@ -113,7 +122,7 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 - The H2 console is disabled outside the `dev` profile.
 
 | Role             | Capabilities                                            |
-|:-----------------|:--------------------------------------------------------|
+| :--------------- | :------------------------------------------------------ |
 | `REVIEWER`       | Start workflows, perform Initial Review                 |
 | `MANAGER`        | Manager Approval, team/user & status visibility         |
 | `SENIOR_MANAGER` | Senior Manager Review, Final Approval, escalation views |
@@ -181,7 +190,7 @@ src/main/resources/
 Base path: `/api/v1`. All endpoints except auth, health and the API docs require a `Bearer` token.
 
 | Method & Path                               | Role(s)                        | Description                            |
-|:--------------------------------------------|:-------------------------------|:---------------------------------------|
+| :------------------------------------------ | :----------------------------- | :------------------------------------- |
 | `POST /auth/token`                          | public (username + password)   | Authenticate → access + refresh tokens |
 | `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                          |
 | `GET  /health`                              | public                         | Health probe                           |
@@ -200,8 +209,8 @@ Base path: `/api/v1`. All endpoints except auth, health and the API docs require
 | `POST /tasks/{taskId}/complete`             | authenticated                  | Complete with a decision               |
 | `GET  /audit/**`                            | AUDITOR, ADMIN, COMPLIANCE     | Audit trail queries                    |
 
-`complete` accepts a `decision` of `APPROVED`, `REJECTED`, `NEEDS_INFO`, `ESCALATE`, `PASS` or `FAIL` (validated),
-an optional `comment`, and optional `additionalVariables`.
+`complete` accepts a `decision` of `APPROVED`, `REJECTED`, `NEEDS_INFO`, `ESCALATE`, `PASS` or `FAIL` (validated)
+and an optional `comment`; any other properties are ignored.
 
 ### Testing the API
 
@@ -214,10 +223,11 @@ without copy/paste. Steps that wait for a background worker retry themselves for
 Collection Runner, or from the command line:
 
 ```bash
-postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080
+postman collection run RegulatoryApprovalSystem.postman_collection.json \
+  --env-var baseUrl=http://localhost:8080 --env-var authPassword="$AUTH_DEFAULT_PASSWORD"
 ```
 
-Set the `authPassword` collection variable if the API users' password is not the default.
+The `authPassword` collection variable must be set to the API users' password (`AUTH_DEFAULT_PASSWORD`).
 
 **Smoke test.** [`scripts/smoke_test.py`](scripts/smoke_test.py) (Python 3, standard library only) runs ~60 checks
 against a running instance: every route through the process (approval, rejection, request-more-information loop,
@@ -225,7 +235,8 @@ escalation to a senior manager, manual compliance review, claim/unclaim, termina
 the audit trail, and the exposed surface (Swagger, actuator, engine REST API authentication, H2 console):
 
 ```bash
-python3 scripts/smoke_test.py --base-url http://localhost:8080 --camunda-password "$CAMUNDA_ADMIN_PASSWORD"
+python3 scripts/smoke_test.py --base-url http://localhost:8080 \
+  --camunda-password "$CAMUNDA_ADMIN_PASSWORD" --api-password "$AUTH_DEFAULT_PASSWORD"
 ```
 
 Both create workflows, so run them against a local or test instance, not one holding real data.
@@ -267,17 +278,22 @@ Every push and pull request runs these via GitHub Actions (`.github/workflows/ci
 
 ### Environment variables
 
+All three are **required** — there are no built-in defaults, and the application refuses to start without them:
+
 ```bash
-export JWT_SECRET=$(openssl rand -base64 64)   # Base64, decodes to ≥ 64 bytes for HS512
-export CAMUNDA_ADMIN_PASSWORD=admin
-export AUTH_DEFAULT_PASSWORD='ChangeMe123!'    # password for the seeded API users (admin, reviewer, manager, ...)
+export JWT_SECRET=$(openssl rand -base64 64)        # Base64, must decode to ≥ 64 bytes for HS512
+export CAMUNDA_ADMIN_PASSWORD='choose-a-password'   # Camunda webapp login + worker access to the engine REST API
+export AUTH_DEFAULT_PASSWORD='choose-a-password'    # password for the seeded API users (admin, reviewer, manager, ...)
 ```
+
+Individual API users can get their own password instead (`AUTH_ADMIN_PASSWORD`, `AUTH_REVIEWER_PASSWORD`,
+`AUTH_MANAGER_PASSWORD`, `AUTH_SENIOR_MANAGER_PASSWORD`, `AUTH_COMPLIANCE_PASSWORD`, `AUTH_AUDITOR_PASSWORD`).
 
 ### Run locally
 
 ```bash
 mvn clean package
-JWT_SECRET=$JWT_SECRET CAMUNDA_ADMIN_PASSWORD=$CAMUNDA_ADMIN_PASSWORD java -jar target/regulatory-approval-system-1.0.0.jar
+java -jar target/regulatory-approval-system-1.0.0.jar   # with the variables above exported
 # or, for development (enables the H2 console — see below):
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
@@ -297,9 +313,11 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 A multi-stage `Dockerfile` (build + slim JRE runtime, non-root, JVM tuned for a 512 MB footprint) is provided.
 
 ```bash
-# Docker Compose (requires JWT_SECRET and CAMUNDA_ADMIN_PASSWORD in the environment)
-docker-compose up -d
+# Docker Compose (requires JWT_SECRET, CAMUNDA_ADMIN_PASSWORD and AUTH_DEFAULT_PASSWORD in the environment)
+docker compose up -d
 ```
 
 The project is also pre-configured for **Render** via `render.yaml` — deploy it with the Blueprint feature and set the
-`JWT_SECRET` and `CAMUNDA_ADMIN_PASSWORD` secrets in the dashboard.
+`JWT_SECRET`, `CAMUNDA_ADMIN_PASSWORD` and `AUTH_DEFAULT_PASSWORD` secrets in the dashboard. For an existing service,
+add any of these that are missing under **Environment** before deploying: Render only prompts for them when a
+Blueprint is first created, and the application will not start without them.

@@ -27,6 +27,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class WorkflowTaskService {
     
+    /**
+     * BPMN id of "Provide Additional Information", the one task the submitter works on.
+     */
+    private static final String SUBMITTER_TASK_DEFINITION_KEY = "Task_RequestInfo";
+    
     private final TaskService camundaTaskService;
     private final RegulatoryRequestRepository requestRepository;
     private final SecurityUtils securityUtils;
@@ -78,7 +83,9 @@ public class WorkflowTaskService {
             }
         }
         
+        // Hide tasks the user may not act on because they submitted the request.
         return allTasks.stream()
+                   .filter(task -> !isReviewOfOwnRequest(task, username))
                    .map(this::buildTaskResponse)
                    .collect(Collectors.toList());
     }
@@ -139,6 +146,7 @@ public class WorkflowTaskService {
             log.warn("User {} (roles {}) denied claim of task {}", username, user.getRoles(), taskId);
             throw new AccessDeniedException("Your role is not eligible to work this task");
         }
+        enforceSeparationOfDuties(task, username, "claim");
         
         try {
             camundaTaskService.claim(taskId, username);
@@ -208,6 +216,7 @@ public class WorkflowTaskService {
                 username, user.getRoles(), taskId, task.getName());
             throw new AccessDeniedException("Your role is not eligible to complete this task");
         }
+        enforceSeparationOfDuties(task, username, "complete");
         
         // Auto-claim if not assigned
         if (task.getAssignee() == null) {
@@ -273,11 +282,6 @@ public class WorkflowTaskService {
             variables.put("taskComment", request.getComment());
         }
         
-        // Add any additional variables
-        if (request.getAdditionalVariables() != null) {
-            variables.putAll(request.getAdditionalVariables());
-        }
-        
         return variables;
     }
     
@@ -331,8 +335,35 @@ public class WorkflowTaskService {
     }
     
     /**
-     * Whether a user may act on (claim/complete) a task: it is already assigned to
-     * them, or one of their roles is a candidate group for the task.
+     * Separation of duties: nobody may review or approve a request they submitted
+     * themselves, whatever their role (e.g. a MANAGER approving their own submission at
+     * Manager Approval, or an ADMIN giving Final Approval to their own request).
+     */
+    private void enforceSeparationOfDuties(Task task, String username, String action) {
+        if (isReviewOfOwnRequest(task, username)) {
+            log.warn("User {} denied {} of task {} '{}': they submitted the request",
+                username, action, task.getId(), task.getName());
+            throw new AccessDeniedException(
+                "Separation of duties: you cannot " + action + " a review task on a request you submitted");
+        }
+    }
+    
+    /**
+     * Whether the task is a review/approval step on a request the user submitted.
+     * "Provide Additional Information" is excluded: it is assigned to the submitter by design.
+     */
+    private boolean isReviewOfOwnRequest(Task task, String username) {
+        if (SUBMITTER_TASK_DEFINITION_KEY.equals(task.getTaskDefinitionKey())) {
+            return false;
+        }
+        return requestRepository.findByProcessInstanceId(task.getProcessInstanceId())
+                   .map(request -> username.equals(request.getSubmitterId()))
+                   .orElse(false);
+    }
+    
+    /**
+     * Whether a user may NOT act on (claim/complete) a task: returns {@code true} unless
+     * the task is already assigned to them or one of their roles is a candidate group.
      */
     private boolean canActOnTask(Task task, UserPrincipal user) {
         if (user.getUsername().equals(task.getAssignee())) {

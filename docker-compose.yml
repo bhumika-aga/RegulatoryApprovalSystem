@@ -10,8 +10,10 @@ services:
       # Required environment variables - must be set before running
       # JWT_SECRET: Generate with: openssl rand -base64 64
       # CAMUNDA_ADMIN_PASSWORD: Set a secure password
+      # AUTH_DEFAULT_PASSWORD: Password of the seeded API users (admin, reviewer, manager, ...)
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required}
       CAMUNDA_ADMIN_PASSWORD: ${CAMUNDA_ADMIN_PASSWORD:?CAMUNDA_ADMIN_PASSWORD environment variable is required}
+      AUTH_DEFAULT_PASSWORD: ${AUTH_DEFAULT_PASSWORD:?AUTH_DEFAULT_PASSWORD environment variable is required}
     ports:
       - "8080:8080"
     networks:

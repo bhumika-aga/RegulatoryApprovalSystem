@@ -2,7 +2,7 @@
   "info": {
     "name": "Regulatory Approval System",
     "_postman_id": "b1e7c3a4-2f10-4d8e-9a21-regulatory0001",
-    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the whole collection top-to-bottom with the Collection Runner or the Postman CLI:\n\n    postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080\n\nEvery request asserts its status code and key fields. Test scripts capture tokens, process instance ids and task ids into collection variables, so no copy/paste is needed. Steps that wait for a background job worker (risk scoring, compliance check, completion) retry themselves for up to ~30 seconds; when sending requests by hand, just send such a step again.\n\nFlow:\n1. Authentication — tokens for reviewer, manager, admin, auditor; token refresh\n2. Workflow — reviewer starts a request; workflow queries\n3. Approval Flow — Initial Review -> Manager Approval -> automated compliance -> Final Approval -> APPROVED\n4. Rejection Flow — a second request rejected at Initial Review\n5. Termination — a third request terminated by an admin\n6. Audit — audit trail queries\n7. Health & Security\n\nSet the authPassword variable if the API users' password (AUTH_DEFAULT_PASSWORD) is not the default. Example responses were captured from a live run of the service.",
+    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the whole collection top-to-bottom with the Collection Runner or the Postman CLI:\n\n    postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080\n\nEvery request asserts its status code and key fields. Test scripts capture tokens, process instance ids and task ids into collection variables, so no copy/paste is needed. Steps that wait for a background job worker (risk scoring, compliance check, completion) retry themselves for up to ~30 seconds; when sending requests by hand, just send such a step again.\n\nFlow:\n1. Authentication — tokens for reviewer, manager, admin, senior manager, auditor; token refresh\n2. Workflow — the admin starts a request; workflow queries\n3. Approval Flow — Initial Review -> Manager Approval -> automated compliance -> Final Approval -> APPROVED (the submitting admin is refused at Final Approval: separation of duties)\n4. Rejection Flow — a second request, submitted by the manager, rejected at Initial Review\n5. Termination — a third request terminated by an admin\n6. Audit — audit trail queries\n7. Health & Security\n\nSet the authPassword variable to the API users' password (AUTH_DEFAULT_PASSWORD), e.g. --env-var authPassword=... on the command line. Example responses were captured from a live run of the service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -20,7 +20,7 @@
     },
     {
       "key": "authPassword",
-      "value": "ChangeMe123!"
+      "value": ""
     },
     {
       "key": "managerToken",
@@ -28,6 +28,10 @@
     },
     {
       "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "seniorToken",
       "value": ""
     },
     {
@@ -244,6 +248,52 @@
           "response": []
         },
         {
+          "name": "Generate Token (Senior Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('seniorToken', pm.response.json().data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"senior.manager\",\n  \"password\": \"{{authPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Generate Token (Auditor)",
           "event": [
             {
@@ -330,7 +380,7 @@
     },
     {
       "name": "2. Workflow",
-      "description": "Start the request used by the approval flow (as the reviewer) and query workflows.",
+      "description": "Start the request used by the approval flow and query workflows. It is submitted by the admin because of separation of duties: nobody may review or approve a request they submitted, so the reviewer, manager and senior manager who act on it must not be its submitter.",
       "item": [
         {
           "name": "Start Workflow",
@@ -358,7 +408,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -446,7 +496,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -519,7 +569,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -556,7 +606,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -691,7 +741,7 @@
     },
     {
       "name": "3. Approval Flow",
-      "description": "Drives the request through Initial Review (reviewer) -> Manager Approval (manager) -> automated compliance check -> Final Approval (admin). Steps that wait for a background job worker retry themselves for up to ~30 seconds when run in the Collection Runner or Postman CLI.",
+      "description": "Drives the request through Initial Review (reviewer) -> Manager Approval (manager) -> automated compliance check -> Final Approval (senior manager; the admin is refused because they submitted the request). Steps that wait for a background job worker retry themselves for up to ~30 seconds when run in the Collection Runner or Postman CLI.",
       "item": [
         {
           "name": "Get My Tasks (Reviewer)",
@@ -804,7 +854,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -1231,7 +1281,7 @@
           "response": []
         },
         {
-          "name": "Get My Tasks (Admin)",
+          "name": "Get My Tasks (Senior Manager)",
           "event": [
             {
               "listen": "prerequest",
@@ -1271,7 +1321,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+                "value": "Bearer {{seniorToken}}"
               }
             ],
             "url": {
@@ -1285,6 +1335,58 @@
                 "tasks"
               ]
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Final Approval by Submitter Refused (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Refused for separation of duties', () => pm.expect(pm.response.text()).to.include('Separation of duties'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Final approval granted\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Separation of duties: the admin may give Final Approval in general, but not to a request they submitted themselves."
           },
           "response": []
         },
@@ -1310,7 +1412,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+                "value": "Bearer {{seniorToken}}"
               }
             ],
             "url": {
@@ -1379,7 +1481,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{adminToken}}"
               }
             ],
             "url": {
@@ -1402,7 +1504,7 @@
     },
     {
       "name": "4. Rejection Flow",
-      "description": "A second request, rejected by the reviewer at Initial Review.",
+      "description": "A second request, submitted by the manager and rejected by the reviewer at Initial Review.",
       "item": [
         {
           "name": "Start Workflow (to reject)",
@@ -1427,7 +1529,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{managerToken}}"
               }
             ],
             "url": {
@@ -1603,7 +1705,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{token}}"
+                "value": "Bearer {{managerToken}}"
               }
             ],
             "url": {

@@ -31,13 +31,13 @@ public class ExternalTaskWorkerConfig {
     @Value("${camunda.bpm.client.worker-id:regulatory-worker}")
     private String workerId;
     
-    // Credentials the client uses to authenticate against the (now protected) engine
-    // REST API. Default to the engine admin user so a single secret governs both the
-    // Cockpit login and worker access.
+    // Credentials the client uses to authenticate against the protected engine REST API:
+    // the engine admin user, so a single secret governs both the Cockpit login and worker
+    // access. The password has no fallback; it must come from CAMUNDA_ADMIN_PASSWORD.
     @Value("${camunda.bpm.admin-user.id:admin}")
     private String engineAuthUsername;
     
-    @Value("${camunda.bpm.admin-user.password:admin}")
+    @Value("${camunda.bpm.admin-user.password}")
     private String engineAuthPassword;
     
     @Bean

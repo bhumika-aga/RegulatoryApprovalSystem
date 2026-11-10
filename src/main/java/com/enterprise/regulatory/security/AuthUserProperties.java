@@ -1,5 +1,6 @@
 package com.enterprise.regulatory.security;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,8 +18,9 @@ import java.util.List;
  * (and their roles) are defined in configuration rather than a database, which
  * suits the in-memory H2 / demo deployment. Passwords are supplied in raw form
  * here and hashed once at startup by {@link AuthUserService} — they are never
- * stored or compared in plain text at request time. Override the passwords via
- * environment variables in any real deployment.
+ * stored or compared in plain text at request time. Passwords come from
+ * environment variables ({@code AUTH_DEFAULT_PASSWORD} or {@code AUTH_<USER>_PASSWORD});
+ * there are no built-in defaults.
  */
 @Component
 @ConfigurationProperties(prefix = "app.security.auth")
@@ -29,7 +31,10 @@ public class AuthUserProperties {
     
     /**
      * Configured users. Roles here are authoritative; clients cannot request roles.
+     * {@code @Valid} applies each user's constraints at startup, so a missing password
+     * stops the application instead of being accepted.
      */
+    @Valid
     private List<User> users = new ArrayList<>();
     
     @Getter

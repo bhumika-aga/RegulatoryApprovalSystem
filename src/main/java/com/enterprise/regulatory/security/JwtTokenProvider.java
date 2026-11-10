@@ -15,6 +15,11 @@ import java.util.List;
 @Slf4j
 public class JwtTokenProvider {
     
+    /**
+     * HS512 requires a key of at least 512 bits.
+     */
+    private static final int MIN_KEY_BYTES = 64;
+    
     private final JwtProperties jwtProperties;
     private final SecretKey signingKey;
     
@@ -25,7 +30,19 @@ public class JwtTokenProvider {
                                    .replaceAll("\\s+", "")  // Remove whitespace/newlines
                                    .replace('-', '+')        // URL-safe to standard Base64
                                    .replace('_', '/');       // URL-safe to standard Base64
-        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(cleanedSecret));
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(cleanedSecret);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("JWT_SECRET must be Base64-encoded (generate one with: openssl rand -base64 64)", e);
+        }
+        // Fail at startup rather than on the first login, when signing would reject the key.
+        if (keyBytes.length < MIN_KEY_BYTES) {
+            throw new IllegalStateException("JWT_SECRET must decode to at least " + MIN_KEY_BYTES
+                                                + " bytes for HS512, got " + keyBytes.length
+                                                + " (generate one with: openssl rand -base64 64)");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
     
     public String generateToken(String username, List<String> roles, String department) {

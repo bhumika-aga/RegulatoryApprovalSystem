@@ -15,15 +15,14 @@ This is a demonstration project; only the latest `main` is maintained.
 
 ## Security notes for operators
 
-This project ships safe-by-default configuration but relies on a few environment variables being set
-correctly in any real deployment:
+This project ships no built-in secrets. The following environment variables are **required**; the
+application refuses to start if any is missing (or if the JWT key is too short):
 
-- **`JWT_SECRET`** — Base64, decoding to at least 64 bytes for HS512. The bundled fallback is for local
-  development only; always override it.
+- **`JWT_SECRET`** — Base64, decoding to at least 64 bytes for HS512 (`openssl rand -base64 64`).
 - **`CAMUNDA_ADMIN_PASSWORD`** — guards the Camunda Cockpit login and worker access to the engine REST API.
-- **`AUTH_DEFAULT_PASSWORD`** (and per-user `AUTH_<ROLE>_PASSWORD`) — passwords for the seeded API users.
+- **`AUTH_DEFAULT_PASSWORD`** (or per-user `AUTH_<USER>_PASSWORD`) — passwords for the seeded API users.
 - The **H2 console** is disabled outside the `dev` profile; do not enable the `dev` profile in production.
 - **`/actuator/health`** is the only publicly reachable actuator endpoint; the raw engine REST API
   (`/engine-rest`) requires HTTP Basic authentication.
 
-See the README's *Security model* section for the full picture.
+See the README's _Security model_ section for the full picture.

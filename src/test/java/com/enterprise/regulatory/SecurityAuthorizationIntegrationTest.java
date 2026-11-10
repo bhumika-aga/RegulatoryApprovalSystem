@@ -18,13 +18,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>Runs the full application on the configured port so the external task
  * workers can complete the automated risk-scoring step and produce the human
- * tasks the authorization checks act on. Uses the seeded demo users and their
- * default password.
+ * tasks the authorization checks act on. The application has no built-in secrets,
+ * so the test supplies them (test-only values).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT, properties = {
+    "JWT_SECRET=" + SecurityAuthorizationIntegrationTest.TEST_JWT_SECRET,
+    "CAMUNDA_ADMIN_PASSWORD=test-camunda-admin-password",
+    "AUTH_DEFAULT_PASSWORD=" + SecurityAuthorizationIntegrationTest.PASSWORD})
 class SecurityAuthorizationIntegrationTest {
     
-    private static final String PASSWORD = "ChangeMe123!";
+    static final String PASSWORD = "Test-Api-Password-1";
+    /**
+     * 64 random bytes, Base64-encoded; used only by this test.
+     */
+    static final String TEST_JWT_SECRET =
+        "HgnK7rbBcZ4oBumFlRn28YIXjxgqZ2nomHJmZY0jDlaKmNyPjAZETiOsHzzTTb9mMnOcaINqN7fOFZQxZtSSQA==";
     
     @LocalServerPort
     private int port;
@@ -86,11 +94,13 @@ class SecurityAuthorizationIntegrationTest {
     
     @Test
     void enforcesCandidateGroupOnTaskCompletion() {
+        String admin = login("admin");
         String reviewer = login("reviewer");
         String manager = login("manager");
         
-        startWorkflow(reviewer, "Task authz flow");
-        String initialReview = awaitFirstTaskId(reviewer);
+        // Submitted by the admin, so neither reviewer nor manager is the submitter.
+        String pid = startWorkflow(admin, "Task authz flow");
+        String initialReview = awaitTask(reviewer, pid, "Task_InitialReview");
         
         // A manager is not a candidate for the REVIEWER's Initial Review task.
         assertThat(complete(manager, initialReview).getStatusCode().value()).isEqualTo(403);
@@ -98,9 +108,67 @@ class SecurityAuthorizationIntegrationTest {
         assertThat(complete(reviewer, initialReview).getStatusCode().value()).isEqualTo(200);
         
         // Next stage is Manager Approval (candidate MANAGER).
-        String managerApproval = awaitFirstTaskId(manager);
+        String managerApproval = awaitTask(manager, pid, "Task_ManagerApproval");
         assertThat(complete(reviewer, managerApproval).getStatusCode().value()).isEqualTo(403);
         assertThat(complete(manager, managerApproval).getStatusCode().value()).isEqualTo(200);
+    }
+    
+    // ---------------------------------------------------------------- Separation of duties
+    
+    @Test
+    void submitterCannotApproveTheirOwnRequest() {
+        String reviewer = login("reviewer");
+        String manager = login("manager");
+        
+        // The manager submits; the reviewer (not the submitter) approves Initial Review.
+        String pid = startWorkflow(manager, "Own request");
+        complete(reviewer, awaitTask(reviewer, pid, "Task_InitialReview"));
+        
+        // Manager Approval is a MANAGER task, but this manager submitted the request:
+        // it is not offered to them, and claiming or completing it is refused.
+        String managerApproval = awaitTaskOfProcess(login("admin"), pid, "Task_ManagerApproval");
+        assertThat(taskIdsOf(manager, pid)).doesNotContain(managerApproval);
+        assertThat(call(HttpMethod.POST, "/api/v1/tasks/" + managerApproval + "/claim", manager, null)
+                       .getStatusCode().value()).isEqualTo(403);
+        ResponseEntity<String> res = complete(manager, managerApproval);
+        assertThat(res.getStatusCode().value()).isEqualTo(403);
+        assertThat(res.getBody()).contains("Separation of duties");
+    }
+    
+    @Test
+    void submitterCanStillProvideRequestedInformation() {
+        String reviewer = login("reviewer");
+        String manager = login("manager");
+        
+        // "Provide Additional Information" is assigned to the submitter by design.
+        String pid = startWorkflow(manager, "Needs info");
+        String initialReview = awaitTask(reviewer, pid, "Task_InitialReview");
+        assertThat(call(HttpMethod.POST, "/api/v1/tasks/" + initialReview + "/complete", reviewer,
+            Map.of("decision", "NEEDS_INFO")).getStatusCode().value()).isEqualTo(200);
+        assertThat(complete(manager, awaitTask(manager, pid, "Task_RequestInfo")).getStatusCode().value())
+            .isEqualTo(200);
+    }
+    
+    // ---------------------------------------------------------------- Process variable injection
+    
+    @Test
+    void clientCannotSetProcessVariables() {
+        String admin = login("admin");
+        String reviewer = login("reviewer");
+        String manager = login("manager");
+        
+        String pid = startWorkflow(admin, "Variable injection attempt");
+        String initialReview = awaitTask(reviewer, pid, "Task_InitialReview");
+        // Extra properties such as additionalVariables are ignored.
+        assertThat(call(HttpMethod.POST, "/api/v1/tasks/" + initialReview + "/complete", reviewer,
+            Map.of("decision", "APPROVED",
+                "additionalVariables", Map.of("riskScore", "abc", "submitterId", "someone-else")))
+                       .getStatusCode().value()).isEqualTo(200);
+        
+        // Previously an injected non-numeric riskScore broke every manager's task list (500).
+        String managerApproval = awaitTask(manager, pid, "Task_ManagerApproval");
+        JsonNode task = json(call(HttpMethod.GET, "/api/v1/tasks/" + managerApproval, manager, null)).get("data");
+        assertThat(task.get("riskScore").isInt()).isTrue();
     }
     
     // ---------------------------------------------------------------- Read scoping (IDOR)
@@ -161,19 +229,49 @@ class SecurityAuthorizationIntegrationTest {
     }
     
     /**
-     * Polls the caller's task queue until a task is available (risk scoring must finish first).
+     * Polls the caller's task queue until the task for the given BPMN step of the given
+     * process appears (risk scoring must finish first).
      */
-    private String awaitFirstTaskId(String token) {
+    private String awaitTask(String token, String processInstanceId, String taskDefinitionKey) {
+        return awaitTaskIn("/api/v1/tasks", token, processInstanceId, taskDefinitionKey);
+    }
+    
+    /**
+     * Like {@link #awaitTask}, but via the per-process task list (oversight roles).
+     */
+    private String awaitTaskOfProcess(String token, String processInstanceId, String taskDefinitionKey) {
+        return awaitTaskIn("/api/v1/tasks/process/" + processInstanceId, token, processInstanceId, taskDefinitionKey);
+    }
+    
+    private String awaitTaskIn(String path, String token, String processInstanceId, String taskDefinitionKey) {
         long deadline = System.currentTimeMillis() + 30_000L;
         while (System.currentTimeMillis() < deadline) {
-            ResponseEntity<String> res = call(HttpMethod.GET, "/api/v1/tasks", token, null);
-            JsonNode data = json(res).get("data");
-            if (data != null && data.isArray() && !data.isEmpty()) {
-                return data.get(0).get("taskId").asText();
+            JsonNode data = json(call(HttpMethod.GET, path, token, null)).get("data");
+            if (data != null && data.isArray()) {
+                for (JsonNode task : data) {
+                    if (processInstanceId.equals(task.get("processInstanceId").asText())
+                            && taskDefinitionKey.equals(task.get("taskDefinitionKey").asText())) {
+                        return task.get("taskId").asText();
+                    }
+                }
             }
             sleep(500);
         }
-        throw new AssertionError("No task became available within the timeout");
+        throw new AssertionError("Task " + taskDefinitionKey + " of process " + processInstanceId
+                                     + " did not become available within the timeout");
+    }
+    
+    private java.util.List<String> taskIdsOf(String token, String processInstanceId) {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        JsonNode data = json(call(HttpMethod.GET, "/api/v1/tasks", token, null)).get("data");
+        if (data != null) {
+            data.forEach(t -> {
+                if (processInstanceId.equals(t.get("processInstanceId").asText())) {
+                    ids.add(t.get("taskId").asText());
+                }
+            });
+        }
+        return ids;
     }
     
     private ResponseEntity<String> call(HttpMethod method, String path, String token, Object body) {

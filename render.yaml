@@ -17,6 +17,10 @@ services:
       # Required: Camunda admin password
       - key: CAMUNDA_ADMIN_PASSWORD
         sync: false
+      # Required: password of the seeded API users (admin, reviewer, manager, ...).
+      # The app refuses to start without it.
+      - key: AUTH_DEFAULT_PASSWORD
+        sync: false
       # Optional: CORS allowed origins (comma-separated)
       - key: APP_CORS_ALLOWED_ORIGINS
         value: "https://regulatory-approval-system.onrender.com"

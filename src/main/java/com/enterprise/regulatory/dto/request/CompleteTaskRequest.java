@@ -8,8 +8,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Map;
-
+/**
+ * Body for completing a user task: a decision and an optional comment.
+ *
+ * <p>Clients cannot set other process variables. Variables drive routing and the
+ * automated checks (e.g. {@code riskScore}, {@code submitterId}), so accepting
+ * arbitrary ones would let a caller bypass the approval flow. Unknown JSON properties
+ * are ignored.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -22,6 +28,4 @@ public class CompleteTaskRequest {
     
     @Size(max = 4000, message = "Comment must not exceed 4000 characters")
     private String comment;
-    
-    private Map<String, Object> additionalVariables;
 }
