@@ -160,14 +160,14 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 - The H2 console is disabled outside the `dev` profile.
 - Line breaks in log messages are replaced, so a value from a request cannot forge extra log lines.
 
-| Role             | Capabilities                                                                         |
-| :--------------- | :----------------------------------------------------------------------------------- |
-| `REVIEWER`       | Start workflows, Initial Review                                                      |
-| `MANAGER`        | Start workflows, Manager Approval, escalated Initial Review, user & status queries   |
-| `SENIOR_MANAGER` | Senior Manager Review, Final Approval, escalated Manager Approval, escalation views  |
-| `COMPLIANCE`     | Compliance Manual Review, audit access                                               |
-| `AUDITOR`        | Read-only audit trail, user/status/escalation queries                                |
-| `ADMIN`          | Start/terminate workflows, Final Approval, escalated compliance steps, every query    |
+| Role             | Capabilities                                                                        |
+| :--------------- | :---------------------------------------------------------------------------------- |
+| `REVIEWER`       | Start workflows, Initial Review                                                     |
+| `MANAGER`        | Start workflows, Manager Approval, escalated Initial Review, user & status queries  |
+| `SENIOR_MANAGER` | Senior Manager Review, Final Approval, escalated Manager Approval, escalation views |
+| `COMPLIANCE`     | Compliance Manual Review, audit access                                              |
+| `AUDITOR`        | Read-only audit trail, user/status/escalation queries                               |
+| `ADMIN`          | Start/terminate workflows, Final Approval, escalated compliance steps, every query  |
 
 `MANAGER`, `SENIOR_MANAGER`, `COMPLIANCE`, `AUDITOR` and `ADMIN` are **oversight** roles: they can read any request and
 its tasks. Anyone else sees only requests they submitted and tasks they can work on.
@@ -322,8 +322,7 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html` when AP
   - **`WorkflowIntegrationTest`** — decision validation, request stages, the audit trail, compliance results and SLA
     escalation.
   - **`ConcurrencyIntegrationTest`** — concurrent updates by API calls and workers are retried and never fail.
-  - **`ExposedSurfaceIntegrationTest`** — the engine REST API, Tasklist, API docs, actuator, client errors (4xx, not
-    500) and that request values cannot forge log lines.
+  - **`ExposedSurfaceIntegrationTest`** — the engine REST API, Tasklist, API docs, actuator, client errors (4xx, not 500) and that request values cannot forge log lines.
 
 The full-stack tests run on a random free port, so nothing needs to be free beforehand. Every push and pull request
 runs the suite, a Docker image build and CodeQL via GitHub Actions (`.github/workflows/`).
@@ -360,12 +359,12 @@ export AUTH_DEFAULT_PASSWORD='choose-a-password'    # password for the seeded AP
 
 Optional:
 
-| Variable                                                                                                                                           | Effect                                                                                        |
-| :------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
-| `AUTH_ADMIN_PASSWORD`, `AUTH_REVIEWER_PASSWORD`, `AUTH_MANAGER_PASSWORD`, `AUTH_SENIOR_MANAGER_PASSWORD`, `AUTH_COMPLIANCE_PASSWORD`, `AUTH_AUDITOR_PASSWORD` | A user's own password instead of `AUTH_DEFAULT_PASSWORD`                                     |
-| `API_DOCS_ENABLED=true`                                                                                                                            | Serve Swagger UI and `/v3/api-docs` (on in the `dev` profile)                                 |
-| `CLIENT_IP_HEADER`                                                                                                                                 | Header with the real client address behind a shared proxy (`CF-Connecting-IP` on Render)      |
-| `APP_CORS_ALLOWED_ORIGINS`                                                                                                                         | Comma-separated browser origins allowed to call the API (default: `localhost:3000` and `:8080`) |
+| Variable                                                                                                                                                      | Effect                                                                                          |
+| :------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------- |
+| `AUTH_ADMIN_PASSWORD`, `AUTH_REVIEWER_PASSWORD`, `AUTH_MANAGER_PASSWORD`, `AUTH_SENIOR_MANAGER_PASSWORD`, `AUTH_COMPLIANCE_PASSWORD`, `AUTH_AUDITOR_PASSWORD` | A user's own password instead of `AUTH_DEFAULT_PASSWORD`                                        |
+| `API_DOCS_ENABLED=true`                                                                                                                                       | Serve Swagger UI and `/v3/api-docs` (on in the `dev` profile)                                   |
+| `CLIENT_IP_HEADER`                                                                                                                                            | Header with the real client address behind a shared proxy (`CF-Connecting-IP` on Render)        |
+| `APP_CORS_ALLOWED_ORIGINS`                                                                                                                                    | Comma-separated browser origins allowed to call the API (default: `localhost:3000` and `:8080`) |
 
 ### Run locally
 
