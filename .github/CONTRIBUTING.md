@@ -15,8 +15,9 @@ mvn verify          # compile + run the unit and integration tests
 mvn spring-boot:run -Dspring-boot.run.profiles=dev   # run locally (enables the H2 console)
 ```
 
-The integration test (`SecurityAuthorizationIntegrationTest`) starts the full application on port
-`8080`, so make sure that port is free when running the suite.
+The `*IntegrationTest` classes start the full application (on a random free port, shared by all of them through
+`IntegrationTestBase`) and exercise it over real HTTP, including the external task workers. The Postman collection
+(`RegulatoryApprovalSystem.postman_collection.json`) runs the same flows against a running instance; see the README.
 
 ## Branching & pull requests
 
@@ -32,7 +33,9 @@ The integration test (`SecurityAuthorizationIntegrationTest`) starts the full ap
   gated behind the `dev` profile.
 - Add or update tests for behavioural changes — the security and authorization rules in particular are
   covered by tests and should stay that way.
-- Update the README when you change behaviour, endpoints, or configuration.
+- Update the README (and the Postman collection) when you change behaviour, endpoints, or configuration.
+- The BPMN file is easily corrupted by IDE XML formatters (they rewrite quotes inside `${...}` expressions); edit it
+  carefully and check the application still starts.
 
 ## Reporting security issues
 

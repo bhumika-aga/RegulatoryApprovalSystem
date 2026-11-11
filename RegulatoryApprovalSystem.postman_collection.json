@@ -2,7 +2,7 @@
   "info": {
     "name": "Regulatory Approval System",
     "_postman_id": "b1e7c3a4-2f10-4d8e-9a21-regulatory0001",
-    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the whole collection top-to-bottom with the Collection Runner or the Postman CLI:\n\n    postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080\n\nEvery request asserts its status code and key fields. Test scripts capture tokens, process instance ids and task ids into collection variables, so no copy/paste is needed. Steps that wait for a background job worker (risk scoring, compliance check, completion) retry themselves for up to ~30 seconds; when sending requests by hand, just send such a step again.\n\nFlow:\n1. Authentication — tokens for reviewer, manager, admin, senior manager, auditor; token refresh\n2. Workflow — the admin starts a request; workflow queries\n3. Approval Flow — Initial Review -> Manager Approval -> automated compliance -> Final Approval -> APPROVED (the submitting admin is refused at Final Approval: separation of duties)\n4. Rejection Flow — a second request, submitted by the manager, rejected at Initial Review\n5. Termination — a third request terminated by an admin\n6. Audit — audit trail queries\n7. Health & Security\n\nSet the authPassword variable to the API users' password (AUTH_DEFAULT_PASSWORD), e.g. --env-var authPassword=... on the command line. Example responses were captured from a live run of the service.",
+    "description": "End-to-end collection for the BPMN-based Regulatory Approval System (Spring Boot 3 + Camunda 7).\n\nRun the whole collection top-to-bottom with the Collection Runner or the Postman CLI:\n\n    postman collection run RegulatoryApprovalSystem.postman_collection.json --env-var baseUrl=http://localhost:8080 --env-var authPassword=<AUTH_DEFAULT_PASSWORD>\n\nSet authPassword to the API users' password (AUTH_DEFAULT_PASSWORD). For a deployed instance, point baseUrl at it, e.g. https://<your-service>.onrender.com.\n\nEvery request asserts its status code and key fields. Test scripts capture tokens, process instance ids and task ids into collection variables, so no copy/paste is needed. Steps that wait for a background worker (risk scoring, compliance check, completion) retry themselves for up to ~30 seconds; when sending requests by hand, just send such a step again.\n\nFlow:\n1. Authentication — tokens for reviewer, manager, admin, senior manager, auditor; token refresh; access and refresh tokens cannot stand in for each other\n2. Workflow — the admin starts a request (stage RISK_ASSESSMENT until it is scored); workflow queries\n3. Approval Flow — Initial Review -> Manager Approval -> automated compliance -> Final Approval -> APPROVED. Shows role checks (403), an unroutable decision (400) and separation of duties (the submitting admin is refused at Final Approval)\n4. Rejection Flow — a request submitted by the manager, rejected at Initial Review\n5. More-Information Loop — NEEDS_INFO, the submitter answers, the request returns to Initial Review\n6. Termination — a request terminated by an admin\n7. Audit — audit trail queries\n8. Health & Security — health, admin-only metrics, closed surfaces (Tasklist, engine REST API), 4xx client errors\n\nThe collection never sends a wrong password: failed logins are rate-limited per client address. It creates workflows, so run it against a local or test instance, not one holding real data. Example responses were captured from a live run of the service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -61,12 +61,20 @@
     {
       "key": "terminateProcessInstanceId",
       "value": ""
+    },
+    {
+      "key": "infoProcessInstanceId",
+      "value": ""
+    },
+    {
+      "key": "infoTaskId",
+      "value": ""
     }
   ],
   "item": [
     {
       "name": "1. Authentication",
-      "description": "Obtain JWTs for each role used by the flow. Roles come from the server's user store.",
+      "description": "Obtain JWTs for each role used by the flow (roles come from the server's user store, not the request), refresh tokens, and check that access and refresh tokens cannot stand in for each other.\n\nNote: failed logins are rate-limited per client address (10 per 15 minutes, then 429), so the collection never sends a wrong password.",
       "item": [
         {
           "name": "Generate Token (Reviewer)",
@@ -375,6 +383,77 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Refresh with an Access Token Refused (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Refresh-Token",
+                "value": "{{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Tokens are typed: the refresh endpoint accepts only a refresh token, so an access token cannot be exchanged for new tokens."
+          }
+        },
+        {
+          "name": "Refresh Token as Bearer Refused (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{refreshToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            },
+            "description": "The reverse: a refresh token cannot be used to call the API."
+          }
         }
       ]
     },
@@ -486,7 +565,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status is 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Returns the started workflow', () => pm.expect(pm.response.json().data.processInstanceId).to.eql(pm.collectionVariables.get('processInstanceId')));"
+                  "pm.test('Returns the started workflow', () => pm.expect(pm.response.json().data.processInstanceId).to.eql(pm.collectionVariables.get('processInstanceId')));",
+                  "pm.test('Stage is risk assessment or initial review', () => pm.expect(pm.response.json().data.currentStage).to.be.oneOf(['RISK_ASSESSMENT', 'INITIAL_REVIEW']));"
                 ]
               }
             }
@@ -546,7 +626,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"APPROVED\",\n    \"currentStage\": \"COMPLETED\",\n    \"submitterId\": \"reviewer\",\n    \"riskScore\": 55,\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.252239\",\n    \"completedAt\": \"2026-06-15T17:42:05.251829\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:06.10\"\n}"
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"requestId\": \"c6cac19e-c2f1-426d-a570-a55f7def01bc\",\n    \"processInstanceId\": \"6c4dab3b-68b3-11f1-8f6e-aaa42a9eb1c7\",\n    \"requestTitle\": \"Onboard new payment vendor\",\n    \"requestType\": \"OPERATIONAL_CHANGE\",\n    \"department\": \"OPERATIONS\",\n    \"priority\": \"NORMAL\",\n    \"status\": \"APPROVED\",\n    \"currentStage\": \"COMPLETED\",\n    \"submitterId\": \"reviewer\",\n    \"riskScore\": 55,\n    \"complianceResult\": \"PASS\",\n    \"escalated\": false,\n    \"createdAt\": \"2026-06-15T17:42:05.065508\",\n    \"updatedAt\": \"2026-06-15T17:42:05.252239\",\n    \"completedAt\": \"2026-06-15T17:42:05.251829\"\n  },\n  \"timestamp\": \"2026-06-15T17:42:06.10\"\n}"
             }
           ]
         },
@@ -1037,6 +1117,57 @@
           "response": []
         },
         {
+          "name": "Unroutable Decision Refused (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Lists the decisions Initial Review accepts', () => pm.expect(pm.response.json().message).to.include('NEEDS_INFO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{taskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{taskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"ESCALATE\",\n  \"comment\": \"Escalate is only possible at Manager Approval\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "ESCALATE exists only at Manager Approval; at Initial Review it is refused with 400 and the task stays open."
+          }
+        },
+        {
           "name": "Complete Initial Review (APPROVED)",
           "event": [
             {
@@ -1083,7 +1214,7 @@
                 }
               }
             },
-            "description": "decision must be one of: APPROVED, REJECTED, NEEDS_INFO, ESCALATE, PASS, FAIL"
+            "description": "The decision must be one the task's next step can route; for Initial Review: APPROVED, REJECTED or NEEDS_INFO (Manager Approval also accepts ESCALATE; Compliance Manual Review takes PASS or FAIL; Provide Additional Information takes APPROVED)."
           },
           "response": [
             {
@@ -1471,6 +1602,7 @@
                   "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
                   "    pm.test('Workflow is APPROVED', () => pm.expect(found, 'Workflow is APPROVED').to.be.ok);",
                   "    pm.test('Stage is COMPLETED', () => pm.expect(found && found.currentStage).to.eql('COMPLETED'));",
+                  "    pm.test('Compliance check passed', () => pm.expect(found && found.complianceResult).to.eql('PASS'));",
                   "}"
                 ]
               }
@@ -1727,7 +1859,449 @@
       ]
     },
     {
-      "name": "5. Termination",
+      "name": "5. More-Information Loop",
+      "description": "A request whose reviewer asks for more information (NEEDS_INFO): the submitter answers in Provide Additional Information, and the request returns to Initial Review. Terminated at the end to clean up.",
+      "item": [
+        {
+          "name": "Start Workflow (needs more information)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('infoProcessInstanceId', pm.response.json().data.processInstanceId);",
+                  "pm.test('Starts at risk assessment', () => pm.expect(pm.response.json().data.currentStage).to.eql('RISK_ASSESSMENT'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestTitle\": \"Change settlement cut-off time\",\n  \"requestDescription\": \"Move the daily settlement cut-off from 17:00 to 18:00\",\n  \"requestType\": \"OPERATIONAL_CHANGE\",\n  \"department\": \"OPERATIONS\",\n  \"priority\": \"NORMAL\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Submitted by the manager, who will later answer the reviewer's question."
+          }
+        },
+        {
+          "name": "Get My Tasks (Reviewer, needs info)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('infoProcessInstanceId') && t.taskDefinitionKey === 'Task_InitialReview');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Initial Review task is available', () => pm.expect(found, 'Initial Review task is available').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('infoTaskId', found.taskId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Request More Information (NEEDS_INFO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{infoTaskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{infoTaskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"NEEDS_INFO\",\n  \"comment\": \"Please attach the impact assessment for downstream systems\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get Workflow Status (Awaiting Information)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Stage is ADDITIONAL_INFORMATION', () => pm.expect(pm.response.json().data.currentStage).to.eql('ADDITIONAL_INFORMATION'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/status/{{infoProcessInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "status",
+                "{{infoProcessInstanceId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get My Tasks (Submitter)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('infoProcessInstanceId') && t.taskDefinitionKey === 'Task_RequestInfo');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Provide Additional Information task is assigned to the submitter', () => pm.expect(found, 'Provide Additional Information task is assigned to the submitter').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('infoTaskId', found.taskId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Provide Additional Information",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks/{{infoTaskId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks",
+                "{{infoTaskId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"comment\": \"Impact assessment attached: no downstream changes needed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "The one task a submitter works on their own request. Its only decision is APPROVED (submit the information)."
+          }
+        },
+        {
+          "name": "Get My Tasks (Reviewer, back at Initial Review)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Pause before a retry (set by this request's test script while it waits).",
+                  "if (pm.collectionVariables.get('retry_' + pm.info.requestName)) {",
+                  "    setTimeout(() => {}, 1000);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const retryKey = 'retry_' + pm.info.requestName;",
+                  "const tries = Number(pm.collectionVariables.get(retryKey) || 0);",
+                  "const found = (pm.response.json().data || []).find(t => t.processInstanceId === pm.collectionVariables.get('infoProcessInstanceId') && t.taskDefinitionKey === 'Task_InitialReview');",
+                  "if (!found && tries < 30) {",
+                  "    pm.collectionVariables.set(retryKey, tries + 1);",
+                  "    pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "    pm.collectionVariables.unset(retryKey);",
+                  "    pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Initial Review is open again', () => pm.expect(found, 'Initial Review is open again').to.be.ok);",
+                  "    if (found) { pm.collectionVariables.set('infoTaskId', found.taskId); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tasks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow Status (Back at Initial Review)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Stage is INITIAL_REVIEW', () => pm.expect(pm.response.json().data.currentStage).to.eql('INITIAL_REVIEW'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{managerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/status/{{infoProcessInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "status",
+                "{{infoProcessInstanceId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Terminate (clean up)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workflow/{{infoProcessInstanceId}}?reason=Collection clean-up",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "{{infoProcessInstanceId}}"
+              ],
+              "query": [
+                {
+                  "key": "reason",
+                  "value": "Collection clean-up"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Termination",
       "description": "A third request, terminated by an administrator while still running.",
       "item": [
         {
@@ -1903,7 +2477,7 @@
       ]
     },
     {
-      "name": "6. Audit",
+      "name": "7. Audit",
       "description": "Audit trail queries (AUDITOR / ADMIN / COMPLIANCE).",
       "item": [
         {
@@ -2304,8 +2878,8 @@
       ]
     },
     {
-      "name": "7. Health & Security",
-      "description": "Public health probe and unauthenticated access.",
+      "name": "8. Health & Security",
+      "description": "The public health probe, admin-only actuator endpoints, closed surfaces (Camunda Tasklist, the engine REST API from outside the server), and 4xx answers for malformed requests.",
       "item": [
         {
           "name": "Health Check (Actuator)",
@@ -2421,6 +2995,214 @@
               "body": "{\n  \"timestamp\": \"2026-06-15T17:06:33.466995\",\n  \"error\": \"Unauthorized\",\n  \"message\": \"Authentication is required to access this resource\",\n  \"status\": 401,\n  \"path\": \"/api/v1/tasks\"\n}"
             }
           ]
+        },
+        {
+          "name": "Metrics Refused for Non-Admin (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{auditorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "metrics"
+              ]
+            },
+            "description": "Actuator endpoints other than health need an ADMIN token."
+          }
+        },
+        {
+          "name": "Metrics for Admin (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Lists metric names', () => pm.expect(pm.response.json().names).to.be.an('array').that.is.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "metrics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Malformed JSON Body (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Explains the problem', () => pm.expect(pm.response.json().message).to.eql('Malformed or unreadable request body'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{not json",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Wrong HTTP Method (405)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 405', () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "token"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Engine REST API Refused Through a Proxy (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Forwarded-For",
+                "value": "203.0.113.7"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/engine-rest/process-definition",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "engine-rest",
+                "process-definition"
+              ]
+            },
+            "description": "The raw engine REST API serves only the in-process workers on this host; any other or proxied request gets 403."
+          }
+        },
+        {
+          "name": "Tasklist Closed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401 or 403', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/camunda/app/tasklist/default/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "camunda",
+                "app",
+                "tasklist",
+                "default"
+              ]
+            },
+            "description": "Tasks are completed only through the API (role checks, separation of duties), so Camunda Tasklist is closed."
+          }
         }
       ]
     }

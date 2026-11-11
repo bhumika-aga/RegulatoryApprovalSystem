@@ -50,12 +50,30 @@ The process model defines the sequence of user tasks, service tasks, gateways, t
 - **Service tasks** are implemented as **external tasks** (`camunda:type="external"`). The engine publishes work to a
   _topic_; a worker locks, executes and completes it. No business code runs inside the engine.
 - **Exclusive gateways** route on process variables set when a task completes — e.g.
-  `${reviewerDecision == 'APPROVED'}`,
-  `${managerDecision == 'ESCALATE'}`, `${complianceResult == 'PASS'}`.
-- **Non-cancelling boundary timers** on the human tasks enforce SLAs (`PT8H`, `PT24H`, `PT48H`, `PT8H`). When a timer
-  fires it spawns a parallel escalation branch (escalate + notify) **without** cancelling the still-pending task: the
-  escalation target's role becomes a candidate for the task and any claim on it is released, so the target can pick it
-  up (the original role still can too).
+  `${reviewerDecision == 'APPROVED'}`, `${managerDecision == 'ESCALATE'}`, `${complianceResult == 'PASS'}`. The API
+  accepts only decisions the next gateway can route (see _API Reference_).
+- **Non-cancelling boundary timers** on the human tasks enforce SLAs: Initial Review 8 h → `MANAGER`, Manager Approval
+  24 h → `SENIOR_MANAGER`, Compliance Manual Review 48 h → `ADMIN`, Final Approval 8 h → `ADMIN`. When a timer fires it
+  spawns a parallel escalation branch (escalate + notify) **without** cancelling the still-pending task: the escalation
+  target's role becomes a candidate for the task and any claim on it is released, so the target can pick it up (the
+  original role still can too).
+
+### Request lifecycle
+
+Each request is also stored as a `RegulatoryRequest` row, which the workflow API returns. Its **status** is `PENDING`
+(while it is being created), `IN_REVIEW`, then `APPROVED`, `REJECTED` or `TERMINATED`. Its **stage** follows the
+process:
+
+```txt
+RISK_ASSESSMENT ─▶ INITIAL_REVIEW ─▶ MANAGER_APPROVAL ─▶ COMPLIANCE_CHECK ─▶ FINAL_APPROVAL ─▶ COMPLETED
+                     ▲      │               │                   │
+                     │      ▼               ▼                   ▼
+          ADDITIONAL_INFORMATION   SENIOR_MANAGER_REVIEW   COMPLIANCE_REVIEW (manual)
+```
+
+A rejection at any step, or a failed compliance check, goes straight to `COMPLETED` with status `REJECTED` and a
+rejection reason naming the step. The automated compliance result (`PASS` / `FAIL` / `REQUIRES_ADDITIONAL_INFO`, or
+the manual `PASS` / `FAIL`) is returned as `complianceResult`.
 
 ### 2. External Task Workers
 
@@ -86,9 +104,13 @@ available. If the last attempt fails, each worker applies a fallback suited to h
 - **Escalation / Notification** — best-effort: complete with an error flag so a failed notification never blocks the
   business process.
 
-A request is updated by both API calls and workers, so two updates can collide on its optimistic-lock `@Version`. The
-losing side is re-run from a fresh read (up to three attempts); if it still collides, the API answers **409** and the
-client can retry.
+If a task's workflow has ended in the meantime (for example, it was terminated), the worker treats the vanished task as
+done.
+
+A request is updated by both API calls and workers, so two updates can collide: on the request row's optimistic-lock
+`@Version`, or on Camunda's own rows (e.g. terminating a workflow while a worker is locking its task). The losing side
+is re-run from a fresh read (up to three attempts); if it still collides, the API answers **409** and the client can
+retry. Two people completing the same task at once get one success and a 409 or 404 — never a 500.
 
 ### 4. Security model
 
@@ -96,13 +118,14 @@ Authentication is **stateless JWT** (HS512). A token carries the subject (userna
 claim — issued by `POST /api/v1/auth/token` after verifying a **username + password** against a configured user store
 (`app.security.auth.users`; passwords are BCrypt-hashed at startup). **Roles and department come from that store, not
 from the request**, so a caller cannot grant itself privileges. This store is a self-contained stand-in for an external
-IdP in production. `POST /api/v1/auth/refresh` re-derives the current roles/department from the store rather than
-trusting the refresh token. Access and refresh tokens are typed: the refresh endpoint accepts only a refresh token, and
-API calls only an access token.
+IdP in production. Access tokens last **24 hours**, refresh tokens **7 days**. `POST /api/v1/auth/refresh`
+re-derives the current roles/department from the store rather than trusting the refresh token. Access and refresh
+tokens are typed: the refresh endpoint accepts only a refresh token, and API calls only an access token.
 
 Failed logins — to the API and to the Camunda webapp — are rate-limited per client address: after 10 failures within
-15 minutes, further login attempts from that address get **429** with `Retry-After` until the window ends. (Counting per address rather than per username means nobody can
-lock a user out by guessing their password. Behind a shared edge proxy, set `CLIENT_IP_HEADER`; see _Deployment_.)
+15 minutes, further login attempts from that address get **429** with `Retry-After` until the window ends. (Counting per
+address rather than per username means nobody can lock a user out by guessing their password. Behind a shared edge
+proxy, set `CLIENT_IP_HEADER`; see _Deployment_.)
 
 Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridable individually via
 `AUTH_<ROLE>_PASSWORD`): `admin`, `reviewer`, `manager`, `senior.manager`, `compliance`, `auditor`.
@@ -137,14 +160,17 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 - The H2 console is disabled outside the `dev` profile.
 - Line breaks in log messages are replaced, so a value from a request cannot forge extra log lines.
 
-| Role             | Capabilities                                            |
-| :--------------- | :------------------------------------------------------ |
-| `REVIEWER`       | Start workflows, perform Initial Review                 |
-| `MANAGER`        | Manager Approval, team/user & status visibility         |
-| `SENIOR_MANAGER` | Senior Manager Review, Final Approval, escalation views |
-| `COMPLIANCE`     | Compliance Manual Review, audit access                  |
-| `AUDITOR`        | Read-only audit trail and status/user queries           |
-| `ADMIN`          | Full access, Final Approval, terminate workflows        |
+| Role             | Capabilities                                                                         |
+| :--------------- | :----------------------------------------------------------------------------------- |
+| `REVIEWER`       | Start workflows, Initial Review                                                      |
+| `MANAGER`        | Start workflows, Manager Approval, escalated Initial Review, user & status queries   |
+| `SENIOR_MANAGER` | Senior Manager Review, Final Approval, escalated Manager Approval, escalation views  |
+| `COMPLIANCE`     | Compliance Manual Review, audit access                                               |
+| `AUDITOR`        | Read-only audit trail, user/status/escalation queries                                |
+| `ADMIN`          | Start/terminate workflows, Final Approval, escalated compliance steps, every query    |
+
+`MANAGER`, `SENIOR_MANAGER`, `COMPLIANCE`, `AUDITOR` and `ADMIN` are **oversight** roles: they can read any request and
+its tasks. Anyone else sees only requests they submitted and tasks they can work on.
 
 ### 5. Audit trail
 
@@ -187,19 +213,20 @@ REST API (controllers)  ──▶  Service layer (WorkflowService, WorkflowTaskS
 
 ```txt
 src/main/java/com/enterprise/regulatory/
-├── config/          # Spring, Camunda, async, OpenAPI configuration
+├── config/          # Spring, Camunda, async, OpenAPI configuration; local-only and login-rate-limit filters
 ├── controller/      # REST endpoints (auth, workflow, tasks, audit)
-├── service/         # Business orchestration
+├── service/         # Business orchestration, request updates, concurrency retries
 ├── worker/          # External task workers + client starter
 ├── listener/        # Camunda execution & task listeners (audit)
-├── security/        # JWT provider, filter, entry point, access-denied handler, identity sync
-├── model/           # JPA entities & enums
+├── security/        # JWT provider and filter, login rate limiting, user store, entry point, access-denied handler
+├── model/           # JPA entities & enums (incl. ReviewStep: each user task's variables and decisions)
 ├── dto/             # Request/response payloads
 ├── repository/      # Spring Data JPA repositories
 └── exception/       # Domain exceptions + global handler
 src/main/resources/
 ├── application.yml
-└── bpmn/            # Process definition (.bpmn)
+├── application-dev.yml   # dev profile: H2 console, Swagger, SQL logging
+└── bpmn/                 # Process definition (.bpmn)
 ```
 
 ---
@@ -213,19 +240,21 @@ Base path: `/api/v1`. All endpoints except auth require a `Bearer` token. (Outsi
 | `POST /auth/token`                          | public (username + password)   | Authenticate → access + refresh tokens |
 | `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                          |
 | `POST /workflow/start`                      | REVIEWER, MANAGER, ADMIN       | Start an approval workflow             |
-| `GET  /workflow/status/{processInstanceId}` | authenticated                  | Current workflow state                 |
-| `GET  /workflow/{requestId}`                | authenticated                  | Workflow by request UUID               |
+| `GET  /workflow/status/{processInstanceId}` | submitter or oversight         | Current workflow state                 |
+| `GET  /workflow/{requestId}`                | submitter or oversight         | Workflow by request UUID               |
 | `GET  /workflow/my-requests`                | authenticated                  | Caller's submissions                   |
 | `GET  /workflow/user/{userId}`              | MANAGER, ADMIN, AUDITOR        | Submissions by a user                  |
 | `GET  /workflow/by-status/{status}`         | MANAGER, ADMIN, AUDITOR        | Filter by status                       |
 | `GET  /workflow/escalated`                  | SENIOR_MANAGER, ADMIN, AUDITOR | Escalated workflows                    |
 | `DELETE /workflow/{processInstanceId}`      | ADMIN                          | Terminate a workflow                   |
 | `GET  /tasks`                               | authenticated                  | Tasks assigned to / available to me    |
-| `GET  /tasks/process/{processInstanceId}`   | authenticated                  | Active tasks for an instance           |
-| `GET  /tasks/{taskId}`                      | authenticated                  | Task details                           |
-| `POST /tasks/{taskId}/claim` · `/unclaim`   | authenticated                  | Claim / release a task                 |
-| `POST /tasks/{taskId}/complete`             | authenticated                  | Complete with a decision               |
+| `GET  /tasks/process/{processInstanceId}`   | submitter or oversight         | Active tasks for an instance           |
+| `GET  /tasks/{taskId}`                      | candidate, assignee, oversight | Task details                           |
+| `POST /tasks/{taskId}/claim` · `/unclaim`   | candidate (not the submitter)  | Claim / release a task                 |
+| `POST /tasks/{taskId}/complete`             | candidate (not the submitter)  | Complete with a decision               |
 | `GET  /audit/**`                            | AUDITOR, ADMIN, COMPLIANCE     | Audit trail queries                    |
+| `GET  /actuator/health`                     | public                         | Health probe (outside `/api/v1`)       |
+| `GET  /actuator/info` · `/metrics`          | ADMIN                          | Build info, metrics                    |
 
 `complete` accepts a `decision` and an optional `comment`; any other properties are ignored. The decision must be one
 the task's next step can route, otherwise the call is refused with **400**:
@@ -239,12 +268,19 @@ the task's next step can route, otherwise the call is refused with **400**:
 | Compliance Manual Review       | `PASS`, `FAIL`                       |
 | Final Approval                 | `APPROVED`, `REJECTED`               |
 
+Errors use the same JSON envelope (`success: false`, `message`, `path`) and conventional status codes: **400** invalid
+input (validation, malformed JSON, an unroutable decision), **401** missing or invalid token, **403** wrong role or
+separation of duties, **404** unknown resource, **405** wrong method, **409** conflict (task claimed by someone else,
+or a concurrent update that outlasted the retries), **415** unsupported content type, **429** too many failed logins.
+
 ### Testing the API
 
 A ready-to-run **Postman collection** is included: [
 `RegulatoryApprovalSystem.postman_collection.json`](RegulatoryApprovalSystem.postman_collection.json).
 It walks a request through the full approval (Initial Review → Manager Approval → automated compliance → Final
-Approval), plus a rejection flow, a termination, audit queries and health/security checks. Every request asserts its
+Approval), plus a rejection, the request-more-information loop, a termination, audit queries, and security checks
+(role and separation-of-duties refusals, token types, unroutable decisions, admin-only metrics, the closed Tasklist and
+engine REST API, 4xx client errors). Every request asserts its
 status code and key fields, and test scripts capture tokens and ids into collection variables, so it runs top-to-bottom
 without copy/paste. Steps that wait for a background worker retry themselves for up to ~30 seconds. Run it in the
 Collection Runner, or from the command line:
@@ -256,7 +292,9 @@ postman collection run RegulatoryApprovalSystem.postman_collection.json \
 
 The `authPassword` collection variable must be set to the API users' password (`AUTH_DEFAULT_PASSWORD`).
 
-The collection creates workflows, so run it against a local or test instance, not one holding real data.
+The collection creates workflows, so run it against a local or test instance, not one holding real data. It never
+sends a wrong password (failed logins are rate-limited). To run it against Render, use
+`--env-var baseUrl=https://<your-service>.onrender.com`.
 
 Interactive docs are also available via Swagger UI at `/swagger-ui.html` when API docs are enabled (`dev` profile or
 `API_DOCS_ENABLED=true`).
@@ -267,8 +305,11 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html` when AP
 
 - **`AuthUserServiceTest`** — unit tests for credential verification (BCrypt match, unknown user, case-insensitive
   lookup).
-- **`WorkerFailureHandlingTest`**, **`ReviewStepRoutingTest`** — worker retries and last-attempt fallbacks, and which
-  decisions each task accepts and the stage each leads to.
+- **`WorkerFailureHandlingTest`**, **`ReviewStepRoutingTest`** — worker retries and last-attempt fallbacks, the stage
+  set by risk scoring, and which decisions each task accepts and the stage each leads to.
+- **`ConcurrencyRetryTest`**, **`CompleteTaskRaceTest`**, **`ConcurrentUpdateResponseTest`**, **`AuditServiceTest`** —
+  retrying conflicting updates, losing a claim race (409), mapping conflicts to 409, and writing audit records only
+  after the transaction commits.
 - **`JwtTokenProviderTest`**, **`JwtAuthenticationFilterTest`**, **`LoginAttemptLimiterTest`**,
   **`ClientAddressResolverTest`**, **`LocalOnlyFilterTest`** — key validation and token types, clearing the Camunda
   identity after each request, login rate limiting and client addresses, and the engine REST API's local-only access.
@@ -284,7 +325,8 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html` when AP
   - **`ExposedSurfaceIntegrationTest`** — the engine REST API, Tasklist, API docs, actuator, client errors (4xx, not
     500) and that request values cannot forge log lines.
 
-Every push and pull request runs these via GitHub Actions (`.github/workflows/ci.yml`).
+The full-stack tests run on a random free port, so nothing needs to be free beforehand. Every push and pull request
+runs the suite, a Docker image build and CodeQL via GitHub Actions (`.github/workflows/`).
 
 ---
 
@@ -316,8 +358,14 @@ export CAMUNDA_ADMIN_PASSWORD='choose-a-password'   # Camunda webapp (Cockpit) l
 export AUTH_DEFAULT_PASSWORD='choose-a-password'    # password for the seeded API users (admin, reviewer, manager, ...)
 ```
 
-Individual API users can get their own password instead (`AUTH_ADMIN_PASSWORD`, `AUTH_REVIEWER_PASSWORD`,
-`AUTH_MANAGER_PASSWORD`, `AUTH_SENIOR_MANAGER_PASSWORD`, `AUTH_COMPLIANCE_PASSWORD`, `AUTH_AUDITOR_PASSWORD`).
+Optional:
+
+| Variable                                                                                                                                           | Effect                                                                                        |
+| :------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------- |
+| `AUTH_ADMIN_PASSWORD`, `AUTH_REVIEWER_PASSWORD`, `AUTH_MANAGER_PASSWORD`, `AUTH_SENIOR_MANAGER_PASSWORD`, `AUTH_COMPLIANCE_PASSWORD`, `AUTH_AUDITOR_PASSWORD` | A user's own password instead of `AUTH_DEFAULT_PASSWORD`                                     |
+| `API_DOCS_ENABLED=true`                                                                                                                            | Serve Swagger UI and `/v3/api-docs` (on in the `dev` profile)                                 |
+| `CLIENT_IP_HEADER`                                                                                                                                 | Header with the real client address behind a shared proxy (`CF-Connecting-IP` on Render)      |
+| `APP_CORS_ALLOWED_ORIGINS`                                                                                                                         | Comma-separated browser origins allowed to call the API (default: `localhost:3000` and `:8080`) |
 
 ### Run locally
 
@@ -333,26 +381,38 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 - **H2 Console**: `http://localhost:8080/h2-console` — **`dev` profile only** (JDBC `jdbc:h2:mem:regulatory_db`, user
   `sa`).
   It is disabled in the default/production configuration.
-- **Health**: `http://localhost:8080/actuator/health` (Spring Boot Actuator; the only publicly reachable actuator
-  endpoint)
+- **Health**: `http://localhost:8080/actuator/health` (the only public actuator endpoint; `info` and `metrics` need an
+  `ADMIN` token)
 
 ---
 
 ## 🐳 Deployment
 
-A multi-stage `Dockerfile` (build + slim JRE runtime, non-root, JVM tuned for a 512 MB footprint) is provided.
+A multi-stage `Dockerfile` (Maven build + slim JRE runtime, non-root user, health check, JVM tuned for a 512 MB
+container) is provided.
 
 ```bash
 # Docker Compose (requires JWT_SECRET, CAMUNDA_ADMIN_PASSWORD and AUTH_DEFAULT_PASSWORD in the environment)
 docker compose up -d
 ```
 
-The project is also pre-configured for **Render** via `render.yaml` — deploy it with the Blueprint feature and set the
-`JWT_SECRET`, `CAMUNDA_ADMIN_PASSWORD` and `AUTH_DEFAULT_PASSWORD` secrets in the dashboard. For an existing service,
-add any of these that are missing under **Environment** before deploying: Render only prompts for them when a
-Blueprint is first created, and the application will not start without them.
+### Render
+
+The project is pre-configured for **Render** via `render.yaml` (Docker runtime, free plan, health check on
+`/actuator/health`). Create it with **New → Blueprint**, pointing at this repository; Render then asks for the three
+secrets (`JWT_SECRET`, `CAMUNDA_ADMIN_PASSWORD`, `AUTH_DEFAULT_PASSWORD`). Render only asks when a Blueprint is first
+created, so for an existing service add any that are missing under **Environment** before deploying — the application
+will not start without them. Pushes to `main` then redeploy automatically.
+
+On the free plan the service sleeps after 15 minutes without traffic (the first request afterwards takes a minute or
+so to wake it), and because the database is **H2 in-memory**, every restart, redeploy or sleep starts with an empty
+database. That suits a demo; for lasting data, point `spring.datasource` at an external database (and add its JDBC
+driver).
 
 Render is fronted by Cloudflare, so every request reaches the app from a shared proxy. `render.yaml` therefore sets
 `CLIENT_IP_HEADER=CF-Connecting-IP`, the header in which Cloudflare passes the real client address, so failed logins are
 counted per client rather than per proxy. (If the service was not created from the Blueprint, add it under
 **Environment**.) Leave it unset anywhere clients connect directly, as they could then forge the header.
+
+Once deployed: the API is at `https://<your-service>.onrender.com/api/v1`, Cockpit at `/camunda` (login `admin` /
+`CAMUNDA_ADMIN_PASSWORD`), and the Postman collection runs against it with `--env-var baseUrl=https://<your-service>.onrender.com`.
