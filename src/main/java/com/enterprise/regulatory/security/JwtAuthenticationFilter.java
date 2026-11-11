@@ -41,12 +41,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 List<String> roles = JwtTokenProvider.rolesOf(claims.get());
                 String department = JwtTokenProvider.departmentOf(claims.get());
                 
-                UserPrincipal userPrincipal = UserPrincipal.create(
-                    username,
-                    null,
-                    null,
-                    department,
-                    roles);
+                UserPrincipal userPrincipal = UserPrincipal.create(username, department, roles);
                 
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     userPrincipal,

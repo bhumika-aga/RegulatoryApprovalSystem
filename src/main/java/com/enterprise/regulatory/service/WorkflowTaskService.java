@@ -147,7 +147,11 @@ public class WorkflowTaskService {
             return buildTaskResponse(task);
             
         } catch (Exception e) {
-            log.error("Failed to claim task: {}", taskId, e);
+            if (ConcurrencyRetry.isOptimisticLockFailure(e)) {
+                log.info("Concurrent update while trying to claim task {}; it will be retried", taskId);
+            } else {
+                log.error("Failed to claim task: {}", taskId, e);
+            }
             throw new TaskOperationException("Failed to claim task: " + e.getMessage(), e);
         }
     }
@@ -174,7 +178,11 @@ public class WorkflowTaskService {
             
             log.info("Task {} unclaimed by user: {}", taskId, username);
         } catch (Exception e) {
-            log.error("Failed to unclaim task: {}", taskId, e);
+            if (ConcurrencyRetry.isOptimisticLockFailure(e)) {
+                log.info("Concurrent update while trying to unclaim task {}; it will be retried", taskId);
+            } else {
+                log.error("Failed to unclaim task: {}", taskId, e);
+            }
             throw new TaskOperationException("Failed to unclaim task: " + e.getMessage(), e);
         }
     }
@@ -228,7 +236,11 @@ public class WorkflowTaskService {
             
             log.info("Task {} completed by user: {} with decision: {}", taskId, username, request.getDecision());
         } catch (Exception e) {
-            log.error("Failed to complete task: {}", taskId, e);
+            if (ConcurrencyRetry.isOptimisticLockFailure(e)) {
+                log.info("Concurrent update while trying to complete task {}; it will be retried", taskId);
+            } else {
+                log.error("Failed to complete task: {}", taskId, e);
+            }
             throw new TaskOperationException("Failed to complete task: " + e.getMessage(), e);
         }
     }

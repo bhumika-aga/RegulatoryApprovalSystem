@@ -182,7 +182,11 @@ public class WorkflowService {
             
             log.info("Workflow terminated: {}, reason: {}", processInstanceId, reason);
         } catch (Exception e) {
-            log.error("Failed to terminate workflow: {}", processInstanceId, e);
+            if (ConcurrencyRetry.isOptimisticLockFailure(e)) {
+                log.info("Concurrent update while trying to terminate workflow {}; it will be retried", processInstanceId);
+            } else {
+                log.error("Failed to terminate workflow: {}", processInstanceId, e);
+            }
             throw new WorkflowException("Failed to terminate workflow: " + e.getMessage(), e);
         }
     }

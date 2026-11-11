@@ -16,14 +16,11 @@ import java.util.stream.Collectors;
 public class UserPrincipal implements UserDetails {
     
     private final String username;
-    private final String email;
-    private final String fullName;
     private final String department;
     private final Set<String> roles;
     private final Collection<? extends GrantedAuthority> authorities;
     
-    public static UserPrincipal create(String username, String email, String fullName,
-                                       String department, List<String> roles) {
+    public static UserPrincipal create(String username, String department, List<String> roles) {
         Set<String> roleSet = Set.copyOf(roles);
         List<GrantedAuthority> authorities = roles.stream()
                                                  .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
@@ -31,8 +28,6 @@ public class UserPrincipal implements UserDetails {
         
         return UserPrincipal.builder()
                    .username(username)
-                   .email(email)
-                   .fullName(fullName)
                    .department(department)
                    .roles(roleSet)
                    .authorities(authorities)

@@ -46,9 +46,7 @@ The process model defines the sequence of user tasks, service tasks, gateways, t
 
 - **User tasks** (`Initial Review`, `Manager Approval`, `Senior Manager Review`, `Compliance Manual Review`,
   `Final Approval`, `Provide Additional Information`) are assigned to **candidate groups** that map directly to JWT
-  roles. They are driven through the REST API. Each also has a Camunda Form (`*.form` under `resources/bpmn/`) whose
-  fields match the process variables; with Tasklist closed, the forms document each step's inputs rather than being
-  rendered.
+  roles. They are driven through the REST API.
 - **Service tasks** are implemented as **external tasks** (`camunda:type="external"`). The engine publishes work to a
   _topic_; a worker locks, executes and completes it. No business code runs inside the engine.
 - **Exclusive gateways** route on process variables set when a task completes — e.g.
@@ -87,6 +85,10 @@ available. If the last attempt fails, each worker applies a fallback suited to h
   which an operator can retry from Cockpit, rather than silently passing.
 - **Escalation / Notification** — best-effort: complete with an error flag so a failed notification never blocks the
   business process.
+
+A request is updated by both API calls and workers, so two updates can collide on its optimistic-lock `@Version`. The
+losing side is re-run from a fresh read (up to three attempts); if it still collides, the API answers **409** and the
+client can retry.
 
 ### 4. Security model
 
@@ -145,9 +147,10 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
 
 ### 5. Audit trail
 
-Every meaningful event is persisted to the `workflow_audit` table via `AuditService` (written **asynchronously** with
-`@Async` so auditing never slows the request path; when the async pool is saturated the caller writes the record
-itself, so no event is dropped):
+Every meaningful event is persisted to the `workflow_audit` table via `AuditService`. Records are written
+**asynchronously**, so auditing never slows the request path, and only **after the surrounding transaction commits**, so
+an action that is rolled back leaves no record. When the async pool is saturated the caller writes the record itself, so
+no event is dropped:
 
 - **Workflow events** — `WORKFLOW_STARTED` / `WORKFLOW_COMPLETED` / `WORKFLOW_TERMINATED` via execution listeners
   (`WORKFLOW_COMPLETED` once, when the process reaches its end event); the completion worker records the final
@@ -173,7 +176,7 @@ REST API (controllers)  ──▶  Service layer (WorkflowService, WorkflowTaskS
         └──────────────▶  JPA / H2 in-memory  ◀───────────┘
 ```
 
-- **REST API layer** — Spring MVC controllers for Auth, Workflow, Tasks, Audit, Health.
+- **REST API layer** — Spring MVC controllers for Auth, Workflow, Tasks, Audit.
 - **Service layer** — orchestration, JPA persistence, security context access.
 - **Engine layer** — embedded Camunda 7 process engine (job executor, history, metrics).
 - **Worker layer** — independent external-task clients polling the engine REST API.
@@ -184,7 +187,7 @@ REST API (controllers)  ──▶  Service layer (WorkflowService, WorkflowTaskS
 ```txt
 src/main/java/com/enterprise/regulatory/
 ├── config/          # Spring, Camunda, async, OpenAPI configuration
-├── controller/      # REST endpoints (auth, workflow, tasks, audit, health)
+├── controller/      # REST endpoints (auth, workflow, tasks, audit)
 ├── service/         # Business orchestration
 ├── worker/          # External task workers + client starter
 ├── listener/        # Camunda execution & task listeners (audit)
@@ -195,20 +198,19 @@ src/main/java/com/enterprise/regulatory/
 └── exception/       # Domain exceptions + global handler
 src/main/resources/
 ├── application.yml
-└── bpmn/            # Process definition (.bpmn) and Camunda Forms (.form)
+└── bpmn/            # Process definition (.bpmn)
 ```
 
 ---
 
 ## 📡 API Reference
 
-Base path: `/api/v1`. All endpoints except auth, health and the API docs require a `Bearer` token.
+Base path: `/api/v1`. All endpoints except auth require a `Bearer` token. (Outside it, `/actuator/health` is public.)
 
 | Method & Path                               | Role(s)                        | Description                            |
 | :------------------------------------------ | :----------------------------- | :------------------------------------- |
 | `POST /auth/token`                          | public (username + password)   | Authenticate → access + refresh tokens |
 | `POST /auth/refresh`                        | public (`X-Refresh-Token`)     | Rotate tokens                          |
-| `GET  /health`                              | public                         | Health probe                           |
 | `POST /workflow/start`                      | REVIEWER, MANAGER, ADMIN       | Start an approval workflow             |
 | `GET  /workflow/status/{processInstanceId}` | authenticated                  | Current workflow state                 |
 | `GET  /workflow/{requestId}`                | authenticated                  | Workflow by request UUID               |
@@ -253,17 +255,7 @@ postman collection run RegulatoryApprovalSystem.postman_collection.json \
 
 The `authPassword` collection variable must be set to the API users' password (`AUTH_DEFAULT_PASSWORD`).
 
-**Smoke test.** [`scripts/smoke_test.py`](scripts/smoke_test.py) (Python 3, standard library only) runs ~60 checks
-against a running instance: every route through the process (approval, rejection, request-more-information loop,
-escalation to a senior manager, manual compliance review, claim/unclaim, termination), role enforcement, read scoping,
-the audit trail, and the exposed surface (Swagger, actuator, engine REST API authentication, H2 console):
-
-```bash
-python3 scripts/smoke_test.py --base-url http://localhost:8080 \
-  --camunda-password "$CAMUNDA_ADMIN_PASSWORD" --api-password "$AUTH_DEFAULT_PASSWORD"
-```
-
-Both create workflows, so run them against a local or test instance, not one holding real data.
+The collection creates workflows, so run it against a local or test instance, not one holding real data.
 
 Interactive docs are also available via Swagger UI at `/swagger-ui.html` when API docs are enabled (`dev` profile or
 `API_DOCS_ENABLED=true`).

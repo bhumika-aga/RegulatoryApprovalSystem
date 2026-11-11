@@ -10,6 +10,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.client.ExternalTaskClient;
+import org.camunda.bpm.client.exception.NotFoundException;
 import org.camunda.bpm.client.task.ExternalTask;
 import org.camunda.bpm.client.task.ExternalTaskHandler;
 import org.camunda.bpm.client.task.ExternalTaskService;
@@ -85,6 +86,9 @@ public class WorkflowCompletionWorker implements ExternalTaskHandler {
             externalTaskService.complete(externalTask, variables);
             log.info("Workflow completion recorded for process: {}, status: {}", processInstanceId, finalStatus);
             
+        } catch (NotFoundException e) {
+            // The task's workflow ended meanwhile (e.g. it was terminated): nothing left to do.
+            log.info("External task {} no longer exists; its workflow has ended", externalTask.getId());
         } catch (Exception e) {
             log.error("Error during workflow completion for process: {}", processInstanceId, e);
             handleFailure(externalTask, externalTaskService, e);

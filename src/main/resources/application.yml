@@ -1,7 +1,5 @@
 server:
   port: 8080
-  servlet:
-    context-path: /
   # Behind a reverse proxy (e.g. Render's), take the scheme and client address from the
   # proxy's X-Forwarded-* headers; Tomcat trusts them only from private/loopback addresses.
   forward-headers-strategy: native
@@ -20,16 +18,12 @@ spring:
     url: jdbc:h2:mem:regulatory_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=LEGACY;NON_KEYWORDS=VALUE
     username: sa
     password:
-    driver-class-name: org.h2.Driver
 
   # H2 Console (for debugging) - disabled by default; enabled only under the `dev`
   # profile (see application-dev.yml) so it is never exposed in production.
   h2:
     console:
       enabled: false
-      path: /h2-console
-      settings:
-        web-allow-others: false
 
   # JPA Configuration
   jpa:
@@ -54,19 +48,6 @@ camunda:
       password: ${CAMUNDA_ADMIN_PASSWORD}
       firstName: Admin
       lastName: User
-    authorization:
-      enabled: false
-    database:
-      schema-update: true
-    history-level: full
-    job-execution:
-      enabled: true
-      core-pool-size: 3
-      max-pool-size: 10
-    metrics:
-      enabled: true
-    webapp:
-      application-path: /camunda
     generic-properties:
       properties:
         # Camunda locks a user after failed logins: for growing delays (3 s, 6 s, ... up to
@@ -81,7 +62,6 @@ camunda:
       # Long-poll window (ms). A poll returns at once when a task is created, so this only
       # bounds idle polls, and with them how long shutdown waits for the last poll to end.
       async-response-timeout: 5000
-      lock-duration: 60000
       max-tasks: 10
       worker-id: regulatory-worker-${random.uuid}
 
@@ -146,10 +126,8 @@ app:
 springdoc:
   api-docs:
     enabled: ${API_DOCS_ENABLED:false}
-    path: /v3/api-docs
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:false}
-    path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
     try-it-out-enabled: true
@@ -166,16 +144,11 @@ management:
   endpoint:
     health:
       show-details: when_authorized
-      probes:
-        enabled: true
 
 # Logging Configuration
 logging:
   level:
-    root: INFO
     com.enterprise.regulatory: DEBUG
-    org.camunda: INFO
-    org.springframework.security: INFO
     org.hibernate.SQL: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

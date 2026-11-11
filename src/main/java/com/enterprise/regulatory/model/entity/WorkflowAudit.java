@@ -28,9 +28,6 @@ public class WorkflowAudit {
     @Column(name = "process_instance_id", nullable = false, length = 64)
     private String processInstanceId;
     
-    @Column(name = "process_definition_key")
-    private String processDefinitionKey;
-    
     @Column(name = "task_id", length = 64)
     private String taskId;
     
@@ -58,12 +55,6 @@ public class WorkflowAudit {
     
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
-    
-    @Column(name = "ip_address", length = 45)
-    private String ipAddress;
-    
-    @Column(name = "additional_data", columnDefinition = "TEXT")
-    private String additionalData;
     
     @PrePersist
     protected void onCreate() {

@@ -3,6 +3,8 @@ package com.enterprise.regulatory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
+import com.enterprise.regulatory.repository.RegulatoryRequestRepository;
+import com.enterprise.regulatory.service.RequestUpdateService;
 import org.camunda.bpm.engine.ManagementService;
 import org.camunda.bpm.engine.runtime.Job;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Map;
 
@@ -59,6 +62,15 @@ class SecurityAuthorizationIntegrationTest {
     
     @Autowired
     private ManagementService managementService;
+    
+    @Autowired
+    private RequestUpdateService requestUpdateService;
+    
+    @Autowired
+    private RegulatoryRequestRepository requestRepository;
+    
+    @Autowired
+    private TransactionTemplate transactionTemplate;
     
     // ---------------------------------------------------------------- Authentication
     
@@ -392,6 +404,52 @@ class SecurityAuthorizationIntegrationTest {
             .contains("MANAGER");
     }
     
+    // ---------------------------------------------------------------- Concurrent updates
+    
+    @Test
+    void aConcurrentUpdateIsRetriedWithoutLosingEitherChange() throws Exception {
+        String pid = startWorkflow(login("admin"), "Concurrent update");
+        java.util.UUID requestId = java.util.UUID.fromString(requestIdOf(login("admin"), pid));
+        
+        java.util.concurrent.CountDownLatch loaded = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch otherCommitted = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
+        
+        // A worker-style update reads the request, then waits while another transaction
+        // updates and commits the same row, so its own commit hits a version conflict.
+        var update = java.util.concurrent.CompletableFuture.supplyAsync(() ->
+                                                                             requestUpdateService.update(requestId.toString(), request -> {
+                                                                                 if (attempts.incrementAndGet() == 1) {
+                                                                                     loaded.countDown();
+                                                                                     await(otherCommitted);
+                                                                                 }
+                                                                                 request.setPriority("URGENT");
+                                                                             }));
+        await(loaded);
+        transactionTemplate.executeWithoutResult(status -> {
+            var request = requestRepository.findById(requestId).orElseThrow();
+            request.setRequestDescription("changed concurrently");
+            requestRepository.save(request);
+        });
+        otherCommitted.countDown();
+        
+        assertThat(update.get(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        assertThat(attempts.get()).isGreaterThanOrEqualTo(2);
+        var request = requestRepository.findById(requestId).orElseThrow();
+        assertThat(request.getPriority()).isEqualTo("URGENT");
+        assertThat(request.getRequestDescription()).isEqualTo("changed concurrently");
+    }
+    
+    @Test
+    void terminatingWhileTheWorkersAreBusyNeverFails() {
+        String admin = login("admin");
+        for (int i = 0; i < 10; i++) {
+            String pid = startWorkflow(admin, "Terminate race " + i);
+            assertThat(call(HttpMethod.DELETE, "/api/v1/workflow/" + pid + "?reason=race", admin, null)
+                           .getStatusCode().value()).as("terminate %d", i).isEqualTo(200);
+        }
+    }
+    
     // ---------------------------------------------------------------- Actuator
     
     @Test
@@ -582,6 +640,17 @@ class SecurityAuthorizationIntegrationTest {
             rolesNode.forEach(n -> result.add(n.asText()));
         }
         return result;
+    }
+    
+    private static void await(java.util.concurrent.CountDownLatch latch) {
+        try {
+            if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for the other transaction");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(e);
+        }
     }
     
     private void sleep(long millis) {

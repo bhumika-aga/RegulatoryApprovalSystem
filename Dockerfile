@@ -60,5 +60,4 @@ ENTRYPOINT ["java", \
     "-XX:ReservedCodeCacheSize=64m", \
     "-XX:+UseSerialGC", \
     "-XX:TieredStopAtLevel=1", \
-    "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]

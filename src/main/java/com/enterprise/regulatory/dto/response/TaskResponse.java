@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
-import java.util.Map;
 import java.util.Set;
 
 @Data
@@ -28,7 +27,6 @@ public class TaskResponse {
     private Date dueDate;
     private String description;
     private Integer priority;
-    private Map<String, Object> variables;
     
     // Request details
     private String requestTitle;

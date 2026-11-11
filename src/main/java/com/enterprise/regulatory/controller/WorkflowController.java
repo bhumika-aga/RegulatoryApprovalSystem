@@ -4,6 +4,7 @@ import com.enterprise.regulatory.dto.request.StartWorkflowRequest;
 import com.enterprise.regulatory.dto.response.ApiResponse;
 import com.enterprise.regulatory.dto.response.WorkflowResponse;
 import com.enterprise.regulatory.model.enums.ApprovalStatus;
+import com.enterprise.regulatory.service.ConcurrencyRetry;
 import com.enterprise.regulatory.service.WorkflowService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,6 +33,7 @@ import java.util.UUID;
 public class WorkflowController {
     
     private final WorkflowService workflowService;
+    private final ConcurrencyRetry concurrencyRetry;
     
     @PostMapping("/start")
     @Operation(summary = "Start a new workflow", description = "Initiates a new regulatory approval workflow")
@@ -106,7 +108,8 @@ public class WorkflowController {
         @Parameter(description = "Process instance ID") @PathVariable String processInstanceId,
         @Parameter(description = "Termination reason") @RequestParam String reason) {
         log.info("Terminating workflow: {} with reason: {}", processInstanceId, reason);
-        workflowService.terminateWorkflow(processInstanceId, reason);
+        // Retried if a worker updated the request meanwhile (e.g. risk scoring just finished).
+        concurrencyRetry.run(() -> workflowService.terminateWorkflow(processInstanceId, reason));
         return ResponseEntity.ok(ApiResponse.success(null, "Workflow terminated successfully"));
     }
 }

@@ -3,6 +3,7 @@ package com.enterprise.regulatory.controller;
 import com.enterprise.regulatory.dto.request.CompleteTaskRequest;
 import com.enterprise.regulatory.dto.response.ApiResponse;
 import com.enterprise.regulatory.dto.response.TaskResponse;
+import com.enterprise.regulatory.service.ConcurrencyRetry;
 import com.enterprise.regulatory.service.WorkflowTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,6 +29,7 @@ import java.util.List;
 public class TaskController {
     
     private final WorkflowTaskService taskService;
+    private final ConcurrencyRetry concurrencyRetry;
     
     @GetMapping
     @Operation(summary = "Get my tasks", description = "Retrieves all tasks assigned to or available for the current user")
@@ -60,7 +62,7 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskResponse>> claimTask(
         @Parameter(description = "Task ID") @PathVariable String taskId) {
         log.info("Claiming task: {}", taskId);
-        TaskResponse task = taskService.claimTask(taskId);
+        TaskResponse task = concurrencyRetry.call(() -> taskService.claimTask(taskId));
         return ResponseEntity.ok(ApiResponse.success(task, "Task claimed successfully"));
     }
     
@@ -69,7 +71,7 @@ public class TaskController {
     public ResponseEntity<ApiResponse<Void>> unclaimTask(
         @Parameter(description = "Task ID") @PathVariable String taskId) {
         log.info("Unclaiming task: {}", taskId);
-        taskService.unclaimTask(taskId);
+        concurrencyRetry.run(() -> taskService.unclaimTask(taskId));
         return ResponseEntity.ok(ApiResponse.success(null, "Task unclaimed successfully"));
     }
     
@@ -79,7 +81,7 @@ public class TaskController {
         @Parameter(description = "Task ID") @PathVariable String taskId,
         @Valid @RequestBody CompleteTaskRequest request) {
         log.info("Completing task: {} with decision: {}", taskId, request.getDecision());
-        taskService.completeTask(taskId, request);
+        concurrencyRetry.run(() -> taskService.completeTask(taskId, request));
         return ResponseEntity.ok(ApiResponse.success(null, "Task completed successfully"));
     }
 }

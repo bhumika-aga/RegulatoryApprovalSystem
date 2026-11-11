@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Execution Listener for recording workflow end events.
- * Uses static injection pattern required for Camunda listener integration.
+ * A Spring bean, referenced from the BPMN as a delegate expression.
  */
 @Component
 @RequiredArgsConstructor

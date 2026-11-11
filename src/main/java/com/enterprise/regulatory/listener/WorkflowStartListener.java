@@ -2,20 +2,15 @@ package com.enterprise.regulatory.listener;
 
 import com.enterprise.regulatory.model.enums.AuditEventType;
 import com.enterprise.regulatory.service.AuditService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.delegate.DelegateExecution;
 import org.camunda.bpm.engine.delegate.ExecutionListener;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * Execution Listener for recording workflow start events.
- * Uses static injection pattern required for Camunda listener integration.
+ * A Spring bean, referenced from the BPMN as a delegate expression.
  */
 @Component
 @RequiredArgsConstructor
@@ -23,25 +18,19 @@ import java.util.Map;
 public class WorkflowStartListener implements ExecutionListener {
     
     private final AuditService auditService;
-    private final ObjectMapper objectMapper;
     
     @Override
     public void notify(DelegateExecution execution) {
         String processInstanceId = execution.getProcessInstanceId();
-        String processDefinitionKey = execution.getProcessDefinitionId();
         String submitterId = (String) execution.getVariable("submitterId");
         String requestTitle = (String) execution.getVariable("requestTitle");
-        String requestType = (String) execution.getVariable("requestType");
         
         log.info("Workflow started - Process: {}, Submitter: {}, Title: {}",
             processInstanceId, submitterId, requestTitle);
         
         try {
-            String additionalData = buildAdditionalData(requestType, requestTitle);
-            
-            auditService.recordAuditEventWithDetails(
+            auditService.recordAuditEvent(
                 processInstanceId,
-                processDefinitionKey,
                 null,
                 "Workflow Start",
                 AuditEventType.WORKFLOW_STARTED,
@@ -49,23 +38,9 @@ public class WorkflowStartListener implements ExecutionListener {
                 "Process started",
                 submitterId != null ? submitterId : "system",
                 null,
-                "Regulatory approval workflow initiated for: " + (requestTitle != null ? requestTitle : "N/A"),
-                null,
-                additionalData);
+                "Regulatory approval workflow initiated for: " + (requestTitle != null ? requestTitle : "N/A"));
         } catch (Exception e) {
             log.error("Error recording workflow start audit event", e);
-        }
-    }
-    
-    private String buildAdditionalData(String requestType, String requestTitle) {
-        try {
-            Map<String, String> data = new HashMap<>();
-            data.put("requestType", requestType != null ? requestType : "N/A");
-            data.put("requestTitle", requestTitle != null ? requestTitle : "N/A");
-            return objectMapper.writeValueAsString(data);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize additional data", e);
-            return "{}";
         }
     }
 }

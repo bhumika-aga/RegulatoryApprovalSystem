@@ -1,9 +1,11 @@
 package com.enterprise.regulatory.exception;
 
 import com.enterprise.regulatory.dto.response.ApiResponse;
+import com.enterprise.regulatory.service.ConcurrencyRetry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -45,7 +47,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleWorkflowException(
         WorkflowException ex, HttpServletRequest request) {
         log.warn("Workflow error: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        // A concurrent-update conflict that outlasted the retries is a 409, not a bad request.
+        HttpStatus status = ConcurrencyRetry.isOptimisticLockFailure(ex) ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status)
                    .body(ApiResponse.error(ex.getMessage(), request.getRequestURI()));
     }
     
@@ -114,6 +118,20 @@ public class GlobalExceptionHandler {
         }
         log.warn("Resource not found: {}", request.getRequestURI());
         return ResponseEntity.notFound().build();
+    }
+    
+    /**
+     * The request was changed concurrently and the retries (see {@code ConcurrencyRetry}) did
+     * not resolve it; the client may simply try again.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentUpdate(
+        OptimisticLockingFailureException ex, HttpServletRequest request) {
+        log.warn("Concurrent update conflict on {} {}: {}", request.getMethod(), request.getRequestURI(),
+            ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                   .body(ApiResponse.error("The request was modified concurrently; please retry",
+                       request.getRequestURI()));
     }
     
     /**

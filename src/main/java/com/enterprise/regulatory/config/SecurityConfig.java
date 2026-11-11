@@ -102,9 +102,6 @@ public class SecurityConfig {
                     .requestMatchers("/api/v1/audit/**")
                     .hasAnyRole("AUDITOR", "ADMIN", "COMPLIANCE")
                     
-                    // Admin endpoints
-                    .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                    
                     // All other requests require authentication
                     .anyRequest().authenticated();
             })
@@ -137,7 +134,7 @@ public class SecurityConfig {
             "Origin",
             "Access-Control-Request-Method",
             "Access-Control-Request-Headers"));
-        configuration.setExposedHeaders(List.of("Authorization", "X-Total-Count"));
+        configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         

@@ -31,9 +31,6 @@ public class ExternalTaskWorkerConfig {
     @Value("${camunda.bpm.client.async-response-timeout:5000}")
     private long asyncResponseTimeout;
     
-    @Value("${camunda.bpm.client.lock-duration:60000}")
-    private long lockDuration;
-    
     @Value("${camunda.bpm.client.max-tasks:10}")
     private int maxTasks;
     
@@ -53,7 +50,6 @@ public class ExternalTaskWorkerConfig {
                    .urlResolver(baseUrl)
                    .workerId(workerId)
                    .asyncResponseTimeout(asyncResponseTimeout)
-                   .lockDuration(lockDuration)
                    .maxTasks(maxTasks)
                    .backoffStrategy(new ExponentialBackoffStrategy(500, 2, 10000))
                    .disableAutoFetching()

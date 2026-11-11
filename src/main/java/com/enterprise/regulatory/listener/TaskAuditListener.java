@@ -35,7 +35,6 @@ public class TaskAuditListener implements TaskListener {
                 case EVENTNAME_CREATE -> handleTaskCreated(delegateTask);
                 case EVENTNAME_ASSIGNMENT -> handleTaskAssigned(delegateTask);
                 case EVENTNAME_COMPLETE -> handleTaskCompleted(delegateTask);
-                case EVENTNAME_DELETE -> handleTaskDeleted(delegateTask);
                 default -> log.debug("Unhandled task event: {}", eventName);
             }
         } catch (Exception e) {
@@ -121,10 +120,6 @@ public class TaskAuditListener implements TaskListener {
         }
         
         log.info("Audit recorded: Task completed - {} by {} with decision: {}", taskName, assignee, decision);
-    }
-    
-    private void handleTaskDeleted(DelegateTask delegateTask) {
-        log.debug("Task deleted: {} ({})", delegateTask.getName(), delegateTask.getId());
     }
     
     private String buildTaskCreatedComment(DelegateTask delegateTask) {
