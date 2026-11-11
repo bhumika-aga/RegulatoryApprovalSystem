@@ -38,7 +38,7 @@ import org.springframework.core.Ordered;
  */
 @Configuration
 public class CamundaSecurityConfig {
-
+    
     @Bean
     public FilterRegistrationBean<LocalOnlyFilter> engineRestLocalOnlyFilter() {
         FilterRegistrationBean<LocalOnlyFilter> registration = new FilterRegistrationBean<>(new LocalOnlyFilter());

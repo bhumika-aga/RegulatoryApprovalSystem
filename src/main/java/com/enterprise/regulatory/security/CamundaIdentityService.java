@@ -20,9 +20,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class CamundaIdentityService {
-
+    
     private final IdentityService identityService;
-
+    
     /**
      * Sets the current thread's Camunda identity.
      *
@@ -33,7 +33,7 @@ public class CamundaIdentityService {
         identityService.setAuthentication(userId, roles);
         log.debug("Set Camunda authentication: {} with groups: {}", userId, roles);
     }
-
+    
     /**
      * Clears the current thread's Camunda identity.
      */

@@ -24,27 +24,6 @@ public class ConcurrencyRetry {
     
     static final int MAX_ATTEMPTS = 3;
     
-    public <T> T call(Supplier<T> action) {
-        for (int attempt = 1; ; attempt++) {
-            try {
-                return action.get();
-            } catch (RuntimeException e) {
-                if (!isOptimisticLockFailure(e) || attempt >= MAX_ATTEMPTS) {
-                    throw e;
-                }
-                log.info("Concurrent update detected (attempt {} of {}); retrying", attempt, MAX_ATTEMPTS);
-                pause(attempt);
-            }
-        }
-    }
-    
-    public void run(Runnable action) {
-        call(() -> {
-            action.run();
-            return null;
-        });
-    }
-    
     /**
      * Whether {@code e}, or any exception it wraps, is a JPA or Camunda optimistic-locking conflict.
      */
@@ -64,5 +43,26 @@ public class ConcurrencyRetry {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+    
+    public <T> T call(Supplier<T> action) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return action.get();
+            } catch (RuntimeException e) {
+                if (!isOptimisticLockFailure(e) || attempt >= MAX_ATTEMPTS) {
+                    throw e;
+                }
+                log.info("Concurrent update detected (attempt {} of {}); retrying", attempt, MAX_ATTEMPTS);
+                pause(attempt);
+            }
+        }
+    }
+    
+    public void run(Runnable action) {
+        call(() -> {
+            action.run();
+            return null;
+        });
     }
 }

@@ -33,7 +33,6 @@ public class OpenApiConfig {
                              .license(new License()
                                           .name("MIT License")
                                           .url("https://opensource.org/licenses/MIT")))
-                   // Relative: "Try it out" calls whichever host is serving these docs.
                    .servers(List.of(new Server().url("/").description("This server")));
     }
 }

@@ -5,7 +5,7 @@ import com.enterprise.regulatory.service.RequestUpdateService;
 import org.camunda.bpm.engine.ManagementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.*;
+import org.springframework.http.HttpMethod;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,13 +40,13 @@ class ConcurrencyIntegrationTest extends IntegrationTestBase {
         // A worker-style update reads the request, then waits while another transaction
         // updates and commits the same row, so its own commit hits a version conflict.
         var update = java.util.concurrent.CompletableFuture.supplyAsync(() ->
-                                                                             requestUpdateService.update(requestId.toString(), request -> {
-                                                                                 if (attempts.incrementAndGet() == 1) {
-                                                                                     loaded.countDown();
-                                                                                     await(otherCommitted);
-                                                                                 }
-                                                                                 request.setPriority("URGENT");
-                                                                             }));
+                                                                            requestUpdateService.update(requestId.toString(), request -> {
+                                                                                if (attempts.incrementAndGet() == 1) {
+                                                                                    loaded.countDown();
+                                                                                    await(otherCommitted);
+                                                                                }
+                                                                                request.setPriority("URGENT");
+                                                                            }));
         await(loaded);
         transactionTemplate.executeWithoutResult(status -> {
             var request = requestRepository.findById(requestId).orElseThrow();

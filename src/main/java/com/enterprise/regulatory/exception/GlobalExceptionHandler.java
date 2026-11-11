@@ -3,23 +3,23 @@ package com.enterprise.regulatory.exception;
 import com.enterprise.regulatory.dto.response.ApiResponse;
 import com.enterprise.regulatory.service.ConcurrencyRetry;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
 import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.OptimisticLockingException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -48,7 +48,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleWorkflowException(
         WorkflowException ex, HttpServletRequest request) {
         log.warn("Workflow error: {}", ex.getMessage());
-        // A concurrent-update conflict that outlasted the retries is a 409, not a bad request.
         HttpStatus status = ConcurrencyRetry.isOptimisticLockFailure(ex) ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
         return ResponseEntity.status(status)
                    .body(ApiResponse.error(ex.getMessage(), request.getRequestURI()));
@@ -113,7 +112,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Void> handleNoResourceFound(
         HttpServletRequest request) {
-        // Silently return 404 for favicon and other static resource requests
         if (request.getRequestURI().contains("favicon")) {
             return ResponseEntity.notFound().build();
         }

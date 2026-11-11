@@ -57,55 +57,35 @@ public class SecurityConfig {
                                               .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> {
                 auth
-                    // Public endpoints
                     .requestMatchers("/api/v1/auth/**").permitAll()
-                    // Health probe stays public for the platform (Render) health check;
-                    // all other actuator endpoints (metrics, info, ...) are for admins.
                     .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                     .requestMatchers("/actuator/**").hasRole("ADMIN")
-                    // API docs: served only when enabled (API_DOCS_ENABLED or the dev profile).
                     .requestMatchers("/swagger-ui/**", "/swagger-ui.html",
                         "/v3/api-docs/**")
                     .permitAll()
                     
-                    // Tasks are completed through the API only, where role checks and
-                    // separation of duties apply: the Tasklist app and the webapp's
-                    // task-completion endpoints are closed, even to the Camunda admin.
                     .requestMatchers("/camunda/app/tasklist/**", "/camunda/api/tasklist/**").denyAll()
                     .requestMatchers(HttpMethod.POST,
                         "/camunda/api/engine/engine/*/task/*/complete",
                         "/camunda/api/engine/engine/*/task/*/submit-form",
                         "/camunda/api/engine/engine/*/task/*/resolve").denyAll()
-                    // Camunda webapp - guarded by Camunda's own login page (only the
-                    // configured admin user exists), so Spring delegates auth to it.
                     .requestMatchers("/camunda/**").permitAll()
                     .requestMatchers("/camunda-welcome/**").permitAll()
-                    // Engine REST API - for the in-process workers only; LocalOnlyFilter
-                    // refuses requests from other hosts (see CamundaSecurityConfig).
                     .requestMatchers("/engine-rest/**").permitAll();
                 
-                // H2 Console - only reachable when explicitly exposed (dev profile).
                 if (h2ConsoleExposed) {
                     auth.requestMatchers("/h2-console/**").permitAll();
                 }
                 
                 auth
-                    // Workflow endpoints - role-based
                     .requestMatchers(HttpMethod.POST, "/api/v1/workflow/start")
                     .hasAnyRole("REVIEWER", "MANAGER", "ADMIN")
                     .requestMatchers("/api/v1/workflow/**").authenticated()
-                    
-                    // Task endpoints - role-based
                     .requestMatchers("/api/v1/tasks/**").authenticated()
-                    
-                    // Audit endpoints - restricted
                     .requestMatchers("/api/v1/audit/**")
                     .hasAnyRole("AUDITOR", "ADMIN", "COMPLIANCE")
-                    
-                    // All other requests require authentication
                     .anyRequest().authenticated();
             })
-            // Frames are denied by default; only relaxed for the H2 console when exposed (dev).
             .headers(headers -> {
                 if (h2ConsoleExposed) {
                     headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin);

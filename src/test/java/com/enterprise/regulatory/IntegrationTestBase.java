@@ -3,7 +3,6 @@ package com.enterprise.regulatory;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -42,21 +41,28 @@ abstract class IntegrationTestBase {
      */
     static final String TEST_JWT_SECRET =
         "HgnK7rbBcZ4oBumFlRn28YIXjxgqZ2nomHJmZY0jDlaKmNyPjAZETiOsHzzTTb9mMnOcaINqN7fOFZQxZtSSQA==";
-    
-    @LocalServerPort
-    protected int port;
-    
     /**
      * No automatic retries or cookie handling: HttpClient would otherwise wait out a 429's
      * {@code Retry-After} (15 minutes) and retry, and the tests manage cookies themselves.
      */
     protected final TestRestTemplate rest = new TestRestTemplate(new RestTemplateBuilder()
-        .requestFactory(() -> new HttpComponentsClientHttpRequestFactory(
-            HttpClients.custom().disableAutomaticRetries().disableCookieManagement().build())));
-    
+                                                                     .requestFactory(() -> new HttpComponentsClientHttpRequestFactory(
+                                                                         HttpClients.custom().disableAutomaticRetries().disableCookieManagement().build())));
+    @LocalServerPort
+    protected int port;
     @Autowired
     protected ObjectMapper mapper;
     
+    protected static void await(java.util.concurrent.CountDownLatch latch) {
+        try {
+            if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for the other transaction");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(e);
+        }
+    }
     
     protected String login(String username) {
         ResponseEntity<String> res = call(HttpMethod.POST, "/api/v1/auth/token", null,
@@ -167,7 +173,7 @@ abstract class IntegrationTestBase {
     }
     
     protected JsonNode awaitWorkflow(String token, String processInstanceId,
-                                   java.util.function.Predicate<JsonNode> condition) {
+                                     java.util.function.Predicate<JsonNode> condition) {
         long deadline = System.currentTimeMillis() + 30_000L;
         JsonNode last = null;
         while (System.currentTimeMillis() < deadline) {
@@ -181,7 +187,7 @@ abstract class IntegrationTestBase {
     }
     
     protected java.util.List<JsonNode> auditEvents(String token, String processInstanceId, String eventType,
-                                                 String taskName) {
+                                                   String taskName) {
         java.util.List<JsonNode> events = new java.util.ArrayList<>();
         JsonNode data = json(call(HttpMethod.GET, "/api/v1/audit/process/" + processInstanceId, token, null))
                             .get("data");
@@ -201,7 +207,7 @@ abstract class IntegrationTestBase {
         while (System.currentTimeMillis() < deadline) {
             java.util.List<JsonNode> events = auditEvents(token, processInstanceId, eventType, taskName);
             if (!events.isEmpty()) {
-                return events.get(0);
+                return events.getFirst();
             }
             sleep(500);
         }
@@ -235,17 +241,6 @@ abstract class IntegrationTestBase {
             rolesNode.forEach(n -> result.add(n.asText()));
         }
         return result;
-    }
-    
-    protected static void await(java.util.concurrent.CountDownLatch latch) {
-        try {
-            if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
-                throw new AssertionError("Timed out waiting for the other transaction");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError(e);
-        }
     }
     
     protected void sleep(long millis) {

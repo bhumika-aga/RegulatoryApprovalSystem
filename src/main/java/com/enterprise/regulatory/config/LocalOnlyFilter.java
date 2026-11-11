@@ -21,19 +21,18 @@ import java.io.IOException;
  */
 @Slf4j
 public class LocalOnlyFilter extends OncePerRequestFilter {
-
+    
     static boolean isLocal(HttpServletRequest request) {
         if (request.getHeader("Forwarded") != null || request.getHeader("X-Forwarded-For") != null) {
             return false;
         }
-        // Compare the literal address rather than resolving it, so no DNS lookup is involved.
         String address = request.getRemoteAddr();
         return address != null && (address.startsWith("127.")
                                        || address.equals("::1")
                                        || address.equals("0:0:0:0:0:0:0:1")
                                        || address.startsWith("::ffff:127."));
     }
-
+    
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,

@@ -21,7 +21,7 @@ class ConcurrentUpdateResponseTest {
     @Test
     void jpaConflictIs409() {
         assertThat(handler.handleConcurrentUpdate(
-            new ObjectOptimisticLockingFailureException("RegulatoryRequest", "id"), request)
+                new ObjectOptimisticLockingFailureException("RegulatoryRequest", "id"), request)
                        .getStatusCode().value()).isEqualTo(409);
     }
 }

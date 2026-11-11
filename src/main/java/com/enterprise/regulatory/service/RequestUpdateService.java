@@ -22,11 +22,11 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 @Slf4j
 public class RequestUpdateService {
-
+    
     private final RegulatoryRequestRepository requestRepository;
     private final TransactionTemplate transactionTemplate;
     private final ConcurrencyRetry concurrencyRetry;
-
+    
     /**
      * Loads the request, applies {@code change} and saves it, all in one transaction. On a
      * concurrent update the whole step is repeated, so {@code change} may run more than once.

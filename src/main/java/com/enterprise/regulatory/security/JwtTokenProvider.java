@@ -57,6 +57,16 @@ public class JwtTokenProvider {
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
     
+    @SuppressWarnings("unchecked")
+    public static List<String> rolesOf(Claims claims) {
+        List<String> roles = claims.get(ROLES_CLAIM, List.class);
+        return roles != null ? roles : List.of();
+    }
+    
+    public static String departmentOf(Claims claims) {
+        return claims.get(DEPARTMENT_CLAIM, String.class);
+    }
+    
     public String generateToken(String username, List<String> roles, String department) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtProperties.getExpirationMs());
@@ -101,16 +111,6 @@ public class JwtTokenProvider {
      */
     public Optional<Claims> parseRefreshToken(String token) {
         return parseTokenOfType(token, REFRESH_TYPE);
-    }
-    
-    @SuppressWarnings("unchecked")
-    public static List<String> rolesOf(Claims claims) {
-        List<String> roles = claims.get(ROLES_CLAIM, List.class);
-        return roles != null ? roles : List.of();
-    }
-    
-    public static String departmentOf(Claims claims) {
-        return claims.get(DEPARTMENT_CLAIM, String.class);
     }
     
     private Optional<Claims> parseTokenOfType(String token, String expectedType) {

@@ -12,8 +12,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LoginAttemptLimiterTest {
     
     private static final String CLIENT = "203.0.113.7";
-    
-    private Instant now = Instant.parse("2026-01-01T00:00:00Z");
     private final LoginAttemptLimiter limiter = new LoginAttemptLimiter(new Clock() {
         @Override
         public ZoneOffset getZone() {
@@ -30,6 +28,7 @@ class LoginAttemptLimiterTest {
             return now;
         }
     });
+    private Instant now = Instant.parse("2026-01-01T00:00:00Z");
     
     private void fail(int times) {
         for (int i = 0; i < times; i++) {

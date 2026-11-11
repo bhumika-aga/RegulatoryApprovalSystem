@@ -37,10 +37,33 @@ public class WorkflowTaskService {
      */
     private static final String SUBMITTER_TASK_DEFINITION_KEY = "Task_RequestInfo";
     
+    /**
+     * Process variables shown with each task.
+     */
+    private static final String[] TASK_LIST_VARIABLES =
+        {"requestTitle", "requestType", "department", "riskScore", "riskCategory", "escalated"};
     private final TaskService camundaTaskService;
     private final RuntimeService runtimeService;
     private final RegulatoryRequestRepository requestRepository;
     private final SecurityUtils securityUtils;
+    
+    /**
+     * The stage a request moves to after a step, following the process model's routing.
+     * Rejections end the workflow, so they lead to COMPLETED.
+     */
+    static String nextStage(ReviewStep step, String decision) {
+        if ("REJECTED".equals(decision) || "FAIL".equals(decision)) {
+            return "COMPLETED";
+        }
+        return switch (step) {
+            case INITIAL_REVIEW -> "NEEDS_INFO".equals(decision) ? "ADDITIONAL_INFORMATION" : "MANAGER_APPROVAL";
+            case PROVIDE_INFORMATION -> "INITIAL_REVIEW";
+            case MANAGER_APPROVAL -> "ESCALATE".equals(decision) ? "SENIOR_MANAGER_REVIEW" : "COMPLIANCE_CHECK";
+            case SENIOR_MANAGER_REVIEW -> "COMPLIANCE_CHECK";
+            case COMPLIANCE_REVIEW -> "FINAL_APPROVAL";
+            case FINAL_APPROVAL -> "COMPLETED";
+        };
+    }
     
     @Transactional(readOnly = true)
     public List<TaskResponse> getTasksForCurrentUser() {
@@ -313,24 +336,6 @@ public class WorkflowTaskService {
     }
     
     /**
-     * The stage a request moves to after a step, following the process model's routing.
-     * Rejections end the workflow, so they lead to COMPLETED.
-     */
-    static String nextStage(ReviewStep step, String decision) {
-        if ("REJECTED".equals(decision) || "FAIL".equals(decision)) {
-            return "COMPLETED";
-        }
-        return switch (step) {
-            case INITIAL_REVIEW -> "NEEDS_INFO".equals(decision) ? "ADDITIONAL_INFORMATION" : "MANAGER_APPROVAL";
-            case PROVIDE_INFORMATION -> "INITIAL_REVIEW";
-            case MANAGER_APPROVAL -> "ESCALATE".equals(decision) ? "SENIOR_MANAGER_REVIEW" : "COMPLIANCE_CHECK";
-            case SENIOR_MANAGER_REVIEW -> "COMPLIANCE_CHECK";
-            case COMPLIANCE_REVIEW -> "FINAL_APPROVAL";
-            case FINAL_APPROVAL -> "COMPLETED";
-        };
-    }
-    
-    /**
      * Candidate group names attached to a task; these mirror JWT role names.
      */
     private Set<String> getCandidateGroups(String taskId) {
@@ -419,12 +424,6 @@ public class WorkflowTaskService {
             throw new AccessDeniedException("You are not permitted to view tasks for this workflow");
         }
     }
-    
-    /**
-     * Process variables shown with each task.
-     */
-    private static final String[] TASK_LIST_VARIABLES =
-        {"requestTitle", "requestType", "department", "riskScore", "riskCategory", "escalated"};
     
     private TaskResponse buildTaskResponse(Task task) {
         return buildTaskResponses(List.of(task)).get(0);

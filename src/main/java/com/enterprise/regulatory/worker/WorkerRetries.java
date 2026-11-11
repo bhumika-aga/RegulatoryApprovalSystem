@@ -11,15 +11,15 @@ import org.camunda.bpm.client.task.ExternalTask;
  * or to let the incident happen; checking for 0 retries on a later attempt never fires.
  */
 final class WorkerRetries {
-
+    
     /**
      * Attempts per task, including the first.
      */
     static final int MAX_ATTEMPTS = 3;
-
+    
     private WorkerRetries() {
     }
-
+    
     /**
      * Retries left once this attempt has failed: 0 means this was the last attempt.
      */
