@@ -29,7 +29,6 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: false
     open-in-view: false
     properties:
       hibernate:
@@ -62,7 +61,6 @@ camunda:
       # Long-poll window (ms). A poll returns at once when a task is created, so this only
       # bounds idle polls, and with them how long shutdown waits for the last poll to end.
       async-response-timeout: 5000
-      max-tasks: 10
       worker-id: regulatory-worker-${random.uuid}
 
 # JWT Security Configuration
@@ -76,10 +74,8 @@ camunda:
 app:
   security:
     jwt:
+      # Access tokens last 24 hours and refresh tokens 7 days (JwtProperties defaults).
       secret-key: ${JWT_SECRET:}
-      expiration-ms: 86400000 # 24 hours
-      refresh-expiration-ms: 604800000 # 7 days
-      issuer: regulatory-approval-system
     # Login rate limiting (API and Camunda webapp) counts failures per client address.
     # Behind an edge proxy that many clients share (Render is fronted by Cloudflare), name
     # the header that carries the real client address, e.g. CF-Connecting-IP; leave blank
@@ -151,4 +147,7 @@ logging:
     com.enterprise.regulatory: DEBUG
     org.hibernate.SQL: WARN
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    # Line breaks in a message are replaced, so a value from a request (a task id, a
+    # username, a termination reason) cannot forge extra log lines. Stack traces are
+    # printed separately and keep their lines.
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %replace(%msg){'[\\r\\n]+', ' '}%n"

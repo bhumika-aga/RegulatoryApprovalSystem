@@ -64,6 +64,26 @@ class WorkerFailureHandlingTest {
     }
     
     @Test
+    @SuppressWarnings("unchecked")
+    void riskScoringMovesTheRequestToInitialReview() {
+        RequestUpdateService updates = mock(RequestUpdateService.class);
+        when(updates.update(anyString(), any())).thenAnswer(call -> {
+            var request = new com.enterprise.regulatory.model.entity.RegulatoryRequest();
+            request.setCurrentStage("RISK_ASSESSMENT");
+            ((java.util.function.Consumer<com.enterprise.regulatory.model.entity.RegulatoryRequest>) call.getArgument(1))
+                .accept(request);
+            assertThat(request.getCurrentStage()).isEqualTo("INITIAL_REVIEW");
+            assertThat(request.getRiskScore()).isNotNull();
+            return true;
+        });
+        ExternalTaskService service = mock(ExternalTaskService.class);
+        new RiskScoringWorker(mock(ExternalTaskClient.class), updates).execute(taskWithRetries(null), service);
+        
+        verify(updates).update(anyString(), any());
+        verify(service).complete(any(ExternalTask.class), anyMap());
+    }
+    
+    @Test
     void completionRaisesAnIncidentOnTheLastAttempt() {
         RequestUpdateService updates = mock(RequestUpdateService.class);
         when(updates.update(anyString(), any())).thenThrow(new IllegalStateException("database down"));

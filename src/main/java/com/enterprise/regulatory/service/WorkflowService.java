@@ -52,7 +52,7 @@ public class WorkflowService {
                                                                          .priority(request.getPriority() != null ? request.getPriority() : "NORMAL")
                                                                          .status(ApprovalStatus.PENDING)
                                                                          .submitterId(username)
-                                                                         .currentStage("INITIAL_REVIEW")
+                                                                         .currentStage("RISK_ASSESSMENT")
                                                                          .build());
         
         regulatoryRequest = requestRepository.save(regulatoryRequest);
@@ -86,8 +86,8 @@ public class WorkflowService {
             return buildWorkflowResponse(regulatoryRequest, "Workflow started successfully");
             
         } catch (Exception e) {
+            // The transaction rolls back, so the request row saved above is discarded too.
             log.error("Failed to start workflow for request: {}", regulatoryRequest.getId(), e);
-            requestRepository.delete(regulatoryRequest);
             throw new WorkflowException("Failed to start workflow: " + e.getMessage(), e);
         }
     }

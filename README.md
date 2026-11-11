@@ -135,6 +135,7 @@ Seeded demo users (one per role — all share `AUTH_DEFAULT_PASSWORD`, overridab
   `admin` cannot stall them.
 - Swagger UI and the OpenAPI description are off unless `API_DOCS_ENABLED=true` (on in the `dev` profile).
 - The H2 console is disabled outside the `dev` profile.
+- Line breaks in log messages are replaced, so a value from a request cannot forge extra log lines.
 
 | Role             | Capabilities                                            |
 | :--------------- | :------------------------------------------------------ |
@@ -271,12 +272,17 @@ Interactive docs are also available via Swagger UI at `/swagger-ui.html` when AP
 - **`JwtTokenProviderTest`**, **`JwtAuthenticationFilterTest`**, **`LoginAttemptLimiterTest`**,
   **`ClientAddressResolverTest`**, **`LocalOnlyFilterTest`** — key validation and token types, clearing the Camunda
   identity after each request, login rate limiting and client addresses, and the engine REST API's local-only access.
-- **`SecurityAuthorizationIntegrationTest`** — full-stack tests over real HTTP covering the auth matrix (400/401/200,
-  refresh preserving roles, server-controlled roles, token types, API and Cockpit login rate limiting), client errors (4xx, not 500), decision validation, request stages, the audit
-trail, SLA escalation, the exposed surface (engine REST API, Tasklist, API
-docs), **task-level authorization** (a role can only complete tasks its
-  candidate group owns), and **read scoping** (a user cannot read another user's workflow/tasks unless they hold an
-  oversight role).
+- **Full-stack tests over real HTTP** (they share one running application; see `IntegrationTestBase`):
+  - **`AuthenticationIntegrationTest`** — logins (400/401/200), server-controlled roles, token types and refresh, and
+    API and Cockpit login rate limiting.
+  - **`AccessControlIntegrationTest`** — a role can only complete tasks its candidate group owns, separation of duties,
+    read scoping (a user cannot read another user's workflow/tasks without an oversight role), and that clients cannot
+    set process variables.
+  - **`WorkflowIntegrationTest`** — decision validation, request stages, the audit trail, compliance results and SLA
+    escalation.
+  - **`ConcurrencyIntegrationTest`** — concurrent updates by API calls and workers are retried and never fail.
+  - **`ExposedSurfaceIntegrationTest`** — the engine REST API, Tasklist, API docs, actuator, client errors (4xx, not
+    500) and that request values cannot forge log lines.
 
 Every push and pull request runs these via GitHub Actions (`.github/workflows/ci.yml`).
 

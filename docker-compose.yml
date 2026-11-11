@@ -14,16 +14,4 @@ services:
       AUTH_DEFAULT_PASSWORD: ${AUTH_DEFAULT_PASSWORD:?AUTH_DEFAULT_PASSWORD environment variable is required}
     ports:
       - "8080:8080"
-    networks:
-      - regulatory-network
-    healthcheck:
-      test:
-        [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-networks:
-  regulatory-network:
-    driver: bridge
+    # Health is checked by the image's own HEALTHCHECK (see Dockerfile).

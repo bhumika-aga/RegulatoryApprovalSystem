@@ -140,8 +140,15 @@ public class RiskScoringWorker implements ExternalTaskHandler {
         return "MINIMAL";
     }
     
+    /**
+     * Stores the score and moves the request to INITIAL_REVIEW, the step the process starts
+     * once this task completes.
+     */
     private void updateRequestRiskScore(String requestId, int riskScore) {
-        requestUpdateService.update(requestId, request -> request.setRiskScore(riskScore));
+        requestUpdateService.update(requestId, request -> {
+            request.setRiskScore(riskScore);
+            request.setCurrentStage("INITIAL_REVIEW");
+        });
     }
     
     private void handleFailure(ExternalTask externalTask, ExternalTaskService externalTaskService, Exception e) {
@@ -158,6 +165,12 @@ public class RiskScoringWorker implements ExternalTaskHandler {
         } else {
             log.error("Risk scoring failed on the last attempt; continuing with the default score 50 / MEDIUM");
             // Non-blocking: set the default risk score and continue
+            try {
+                updateRequestRiskScore(externalTask.getVariable("requestId"), 50);
+            } catch (Exception updateFailure) {
+                // Best-effort: the default score still lets review proceed.
+                log.warn("Could not record the default risk score: {}", updateFailure.getMessage());
+            }
             Map<String, Object> variables = new HashMap<>();
             variables.put("riskScore", 50);
             variables.put("riskCategory", "MEDIUM");

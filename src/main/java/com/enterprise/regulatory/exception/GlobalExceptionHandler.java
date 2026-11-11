@@ -5,6 +5,7 @@ import com.enterprise.regulatory.service.ConcurrencyRetry;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.validation.ConstraintViolationException;
+import org.camunda.bpm.engine.OptimisticLockingException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -121,12 +122,11 @@ public class GlobalExceptionHandler {
     }
     
     /**
-     * The request was changed concurrently and the retries (see {@code ConcurrencyRetry}) did
-     * not resolve it; the client may simply try again.
+     * The request was changed concurrently (a JPA or a Camunda engine version conflict) and the
+     * retries (see {@code ConcurrencyRetry}) did not resolve it; the client may simply try again.
      */
-    @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConcurrentUpdate(
-        OptimisticLockingFailureException ex, HttpServletRequest request) {
+    @ExceptionHandler({OptimisticLockingFailureException.class, OptimisticLockingException.class})
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentUpdate(Exception ex, HttpServletRequest request) {
         log.warn("Concurrent update conflict on {} {}: {}", request.getMethod(), request.getRequestURI(),
             ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)

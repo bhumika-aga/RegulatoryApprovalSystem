@@ -12,6 +12,7 @@ import com.enterprise.regulatory.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.camunda.bpm.engine.RuntimeService;
+import org.camunda.bpm.engine.TaskAlreadyClaimedException;
 import org.camunda.bpm.engine.TaskService;
 import org.camunda.bpm.engine.runtime.VariableInstance;
 import org.camunda.bpm.engine.task.IdentityLink;
@@ -219,14 +220,17 @@ public class WorkflowTaskService {
                                                    + task.getName() + "'; expected one of " + step.decisions());
         }
         
-        // Auto-claim if not assigned
-        if (task.getAssignee() == null) {
-            camundaTaskService.claim(taskId, username);
-        } else if (!task.getAssignee().equals(username)) {
+        if (task.getAssignee() != null && !task.getAssignee().equals(username)) {
             throw new TaskOperationException("Task is assigned to another user: " + task.getAssignee());
         }
         
         try {
+            // Auto-claim if not assigned. Another candidate may claim it at the same moment;
+            // the loser gets a 409 (below), not a 500.
+            if (task.getAssignee() == null) {
+                camundaTaskService.claim(taskId, username);
+            }
+            
             Map<String, Object> variables = buildCompletionVariables(step, request);
             
             camundaTaskService.complete(taskId, variables);
@@ -235,6 +239,9 @@ public class WorkflowTaskService {
             updateRequestWithDecision(task.getProcessInstanceId(), step, request);
             
             log.info("Task {} completed by user: {} with decision: {}", taskId, username, request.getDecision());
+        } catch (TaskAlreadyClaimedException e) {
+            log.info("Task {} was claimed by {} before {} could complete it", taskId, e.getTaskAssignee(), username);
+            throw new TaskOperationException("Task is assigned to another user: " + e.getTaskAssignee());
         } catch (Exception e) {
             if (ConcurrencyRetry.isOptimisticLockFailure(e)) {
                 log.info("Concurrent update while trying to complete task {}; it will be retried", taskId);
